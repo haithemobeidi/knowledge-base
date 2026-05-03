@@ -1,0 +1,11 @@
+# Copy this as `.gitignore` in the new project and customize.
+# Baseline entries that keep Claude's protocol bookkeeping clean + exclude
+# common build artifacts. Add language/framework-specific ignores below the line.
+
+# Claude Code — protocol state
+.claude/pending-index-updates.txt
+.claude/settings.local.json
+.claude/worktrees/
+
+# Project-specific ignores go below
+# ---------------------------------

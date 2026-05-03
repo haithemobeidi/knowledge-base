@@ -1,0 +1,17 @@
+# Knowledge Base — repo-level ignores
+
+# Archived/zipped copies of the live template — keep the source, drop the artifact
+*.7z
+*.zip
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/
+
+# Claude Code per-machine state (keep settings.json, ignore local overrides)
+.claude/settings.local.json
+.claude/pending-index-updates.txt
+.claude/worktrees/
