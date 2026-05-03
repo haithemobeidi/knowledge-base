@@ -1,6 +1,6 @@
 # Claude Code Project Template
 
-A copy-in-and-customize skeleton for new projects that want the session protocol, code quality rules, and automated codebase-index discipline developed on the Checkpoint project.
+A copy-in-and-customize skeleton for new projects that want the session protocol, code quality rules, and automated codebase-index discipline developed on a real Tauri + Cloudflare project.
 
 ## Prerequisites
 
@@ -142,4 +142,4 @@ The rule of thumb: memory is for things that would be hard to figure out by read
 
 ## Provenance
 
-Extracted from Checkpoint (C:\Users\haith\Documents\Vibe Projects\Checkpoint) on 2026-04-20 after the Pass A audit consolidated the project's conventions into a stable shape. Source of truth for future template updates: whatever Checkpoint is doing at the time you decide to resync.
+Extracted from a Tauri 2 + Cloudflare Worker desktop app on 2026-04-20 after a project-wide audit consolidated the conventions into a stable shape. The source project's exact path is environment-specific; treat this template as the canonical version and resync upstream conventions when they meaningfully evolve.

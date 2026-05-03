@@ -4,11 +4,11 @@ Append-only log of why this knowledge base is shaped the way it is. Newest entri
 
 ---
 
-## 2026-04-20 — Extract `claude-project-template` from Checkpoint
+## 2026-04-20 — Extract `claude-project-template` from the source project
 
-**Decision:** Snapshot Checkpoint's `.claude/`, root `CLAUDE.md` / `PROTOCOL.md`, and `docs/` skeleton into `claude-project-template/` here.
+**Decision:** Snapshot the source project's `.claude/`, root `CLAUDE.md` / `PROTOCOL.md`, and `docs/` skeleton into `claude-project-template/` here.
 
-**Why:** Checkpoint had stabilized the session protocol (CURRENT_STATE overwrite, HANDOFF_LOG append, hook-enforced index, worktree guard, /start + /end). Re-deriving these for every new project was wasted ceremony. Canonical source of truth: this template; resync from Checkpoint when its protocol meaningfully evolves.
+**Why:** The source project (a Tauri 2 + Cloudflare Worker desktop app) had stabilized the session protocol (CURRENT_STATE overwrite, HANDOFF_LOG append, hook-enforced index, worktree guard, /start + /end). Re-deriving these for every new project was wasted ceremony. Canonical source of truth: this template; resync upstream when conventions meaningfully evolve.
 
 **How to apply:** New projects start by copying this template wholesale, then customizing `<ProjectName>` / `<TODO>` markers. The template is *not* a generator — it's a paste-and-edit skeleton.
 
@@ -16,7 +16,7 @@ Append-only log of why this knowledge base is shaped the way it is. Newest entri
 
 ## 2026-04-13 — Canonize Tauri OAuth lesson
 
-**Decision:** Promote the localhost-callback + bearer-token Tauri OAuth pattern from Checkpoint into a standalone `tauri-desktop-oauth.md` lesson.
+**Decision:** Promote the localhost-callback + bearer-token Tauri OAuth pattern into a standalone `tauri-desktop-oauth.md` lesson.
 
 **Why:** Cookie-based desktop OAuth (custom URL schemes, `@daveyplate/better-auth-tauri`) was unreliable on Windows specifically. Wasted ~2 days debugging. The pattern that worked is identical to what VS Code / GitHub CLI / JetBrains do, so it generalizes beyond Tauri.
 
@@ -64,7 +64,7 @@ Append-only log of why this knowledge base is shaped the way it is. Newest entri
 
 ---
 
-## 2026-05-03 — De-hardcode Checkpoint paths
+## 2026-05-03 — De-hardcode personal paths
 
 **Decision:** Replace absolute Windows paths in `claude-project-template/README.md` and `tauri-desktop-oauth.md` with `$KB_TEMPLATE_DIR`-style env-var instructions and stack-relative descriptions.
 
