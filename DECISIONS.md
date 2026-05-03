@@ -101,3 +101,13 @@ Append-only log of why this knowledge base is shaped the way it is. Newest entri
 **Why:** Audit found that all four scripts silently no-op when `CLAUDE_PROJECT_DIR` is unset. Harness sets it, but if a wrapper / IDE plugin strips it, hooks vanish without output. Users won't know index tracking failed until they accumulate untracked files. Documenting the contract + giving a 5-step diagnostic is cheaper than refactoring the scripts to log loudly (which would compete with Claude Code's stdout).
 
 **How to apply:** Future hook scripts that depend on env vars get the same treatment — document the dependency, add a one-liner diagnostic.
+
+---
+
+## 2026-05-03 — Add agent-readable bootstrap procedure to root README
+
+**Decision:** Add an "Agent instructions — copying this into a new project" section at the top of the KB root README. Lists trigger phrases, a 7-step bootstrap procedure, and explicit "do not copy lessons / do not auto-load lessons" rules.
+
+**Why:** The right workflow is "open Claude Code in a new project, point it at the KB, say 'copy the KB over.'" That requires Claude to read a procedure on arrival. Without one, each project's bootstrap drifts based on the prompt the user remembers to type. Putting it in the README means every time Claude lands in the KB it sees exactly what to do — no guessing, no token-waste on lessons that don't apply.
+
+**How to apply:** When bootstrapping a new project, the user only needs to say "copy the KB over" (or any of the listed trigger phrases). Claude reads the README, runs the procedure, asks one stack question, customizes accordingly. Lessons stay parked unless explicitly pulled in.
