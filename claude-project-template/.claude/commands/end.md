@@ -21,7 +21,7 @@ If the cwd contains `.claude/worktrees/` OR the branch starts with `claude/`, **
 >
 > **Root cause:** Claude Code Desktop force-creates worktrees per session. The `tengu_worktree_mode` flag is CLI-only and ignored by desktop. See [anthropics/claude-code#21236](https://github.com/anthropics/claude-code/issues/21236).
 >
-> **Recommended:** do not `/end` from this worktree. Quit without ending (work on disk is preserved). Then either (a) use the CLI from a terminal — `cd "<project-dir>" && claude` — or (b) apply the desktop Reddit workaround (Settings → Claude Code → Desktop: Worktree location → Custom = `C:\Program Files`). Start a new session in the main checkout and resume there.
+> **Recommended:** do not `/end` from this worktree. Quit without ending (work on disk is preserved). Then either (a) use the CLI from a terminal — `cd` into your project root and run `claude` — or (b) apply the desktop Reddit workaround (Settings → Claude Code → Desktop: Worktree location → Custom = `C:\Program Files`). Start a new session in the main checkout and resume there.
 >
 > If you absolutely need to commit work from this worktree before quitting, ask explicitly — this protocol will not silently fast-forward main from a worktree branch.
 

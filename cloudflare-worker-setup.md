@@ -1,3 +1,9 @@
+---
+stack: [cloudflare-worker, d1, wrangler]
+kind: recipe
+last_verified: 2026-04-13
+---
+
 # Cloudflare Worker + D1 Setup (from zero to deployed)
 
 > The exact sequence. No fluff.

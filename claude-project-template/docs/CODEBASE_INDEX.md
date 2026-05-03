@@ -18,6 +18,7 @@
 | `ROADMAP.md` | Phased development plan |
 | `DECISIONS.md` | Architecture decision log — append-only with rationale for every major choice |
 | `.gitignore` | Git ignore rules |
+| `.mcp.json.template` | Opt-in Cloudflare MCP server bundle (Workers Bindings, observability, browser rendering). Rename to `.mcp.json` to enable. |
 | `package.json` | <TODO if JS project — or delete row> |
 
 ## docs/

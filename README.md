@@ -13,6 +13,11 @@ Reusable patterns and lessons learned from vibe coding projects. Reference these
 - [tauri-ipc-serde.md](./tauri-ipc-serde.md) — Always add `#[serde(rename_all = "camelCase")]` to Rust structs crossing the Tauri IPC boundary. Hidden `undefined`-field bug.
 - [cloudflare-worker-setup.md](./cloudflare-worker-setup.md) — Deploying a Cloudflare Worker + D1 from zero. Exact command sequence, secrets, CORS for native apps.
 
-## Decisions
+## Decisions & references
 
 - [DECISIONS.md](./DECISIONS.md) — Append-only log of why this knowledge base is shaped the way it is. Read before adding a new lesson or restructuring.
+- [references.md](./references.md) — Curated reading list: Diátaxis, awesome-claude-code, MCP servers, Tauri/Cloudflare-specific resources. Browse on demand.
+
+## Freshness rule
+
+Every lesson `.md` carries YAML frontmatter with `stack`, `kind`, and `last_verified` (date). When you reread a lesson and confirm it's still right, bump `last_verified` to today. When you change anything in the recipe, bump it as part of the same edit. Anything older than ~6 months is suspect — verify before relying on it. No tooling enforces this; it's a habit, not a hook.

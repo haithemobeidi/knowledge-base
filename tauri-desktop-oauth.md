@@ -1,3 +1,9 @@
+---
+stack: [tauri, better-auth, cloudflare-worker]
+kind: howto
+last_verified: 2026-04-13
+---
+
 # Desktop OAuth for Tauri 2 Apps (Windows/macOS/Linux)
 
 > Learned the hard way building Checkpoint (2026-04-13). This is the pattern that works.
@@ -187,8 +193,11 @@ app.post('/api/auth/exchange-code', async (c) => {
 
 ## Reference Implementation
 
-See the Checkpoint project at `C:\Users\haith\Documents\Vibe Projects\Checkpoint`:
+This pattern was first proven in the **Checkpoint** project (a Tauri 2 + Cloudflare Worker + better-auth desktop app). Look there for a working end-to-end example:
+
 - Exchange endpoint: `apps/cloud/src/auth/exchange.ts`
 - Frontend OAuth flow: `packages/frontend/src/features/sync/SyncAccountSection.tsx`
 - Auth client helpers: `packages/frontend/src/features/sync/auth-client.ts`
 - Rust sync commands with bearer auth: `apps/desktop/src-tauri/src/commands/sync.rs`
+
+The exact location of Checkpoint on disk is environment-specific; if you can't find it, the file paths above describe the layout you'd recreate in any Tauri 2 + better-auth project.

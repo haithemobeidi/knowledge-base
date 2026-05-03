@@ -1,3 +1,9 @@
+---
+stack: [tauri, rust]
+kind: gotcha
+last_verified: 2026-04-13
+---
+
 # Tauri IPC Serde Conventions (Rust ↔ TypeScript)
 
 > Save yourself an hour of "why is this field undefined?" debugging.

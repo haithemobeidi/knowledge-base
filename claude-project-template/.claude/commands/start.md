@@ -28,7 +28,7 @@ If the cwd contains `.claude/worktrees/` OR the branch starts with `claude/`, **
 > **Root cause:** Claude Code Desktop force-creates a worktree per session. The CLI flag `tengu_worktree_mode` is CLI-only and ignored by desktop. See [anthropics/claude-code#21236](https://github.com/anthropics/claude-code/issues/21236).
 >
 > **Two fixes — pick one:**
-> 1. **Use the CLI (guaranteed).** Quit this session. Open Git Bash / Windows Terminal. Run: `cd "<project-dir>" && claude`. New session will land on `main`.
+> 1. **Use the CLI (guaranteed).** Quit this session. Open Git Bash / Windows Terminal. `cd` into your project root and run `claude`. The new session will land on `main`.
 > 2. **Desktop Reddit workaround.** Settings → Claude Code → Desktop: Worktree location → set Custom folder location to `C:\Program Files` (or any admin-only path). Desktop will fail to create the worktree and fall back to the main checkout. Quit and restart this session to verify.
 
 **Only proceed to Step 1 if BOTH** `pwd` does NOT contain `.claude/worktrees/` **AND** the branch is `main`.

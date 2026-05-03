@@ -2,6 +2,16 @@
 
 A copy-in-and-customize skeleton for new projects that want the session protocol, code quality rules, and automated codebase-index discipline developed on the Checkpoint project.
 
+## Prerequisites
+
+The template's hooks rely on one harness-provided environment variable:
+
+- **`CLAUDE_PROJECT_DIR`** — the absolute path of the project root. Claude Code sets this automatically when launching, so the four Python hook scripts in `.claude/scripts/` resolve project-relative paths correctly. **You should not need to set it yourself.**
+
+If hooks are silently doing nothing (see Troubleshooting), the most common cause is that `CLAUDE_PROJECT_DIR` is unset because Claude Code was launched from outside the project root, or because a wrapper / IDE plugin stripped it. Verify with `python -c "import os; print(os.environ.get('CLAUDE_PROJECT_DIR'))"` from inside Claude Code's Bash tool.
+
+Other prerequisites: `python3` on `PATH`, `git`, and a Claude Code version recent enough to support `SessionStart`, `PostToolUse`, and `Stop` hooks (any 2025-Q4 build or later).
+
 ## What this gets you
 
 - **Auto-loaded `CLAUDE.md`** — project rules + work style that every session starts with.
@@ -9,26 +19,34 @@ A copy-in-and-customize skeleton for new projects that want the session protocol
 - **`/start` + `/end` slash commands** — wired session begin/close with worktree guard, clean-tree guarantee, and auto-push.
 - **PostToolUse hook** — enforces `CODEBASE_INDEX.md` updates automatically. New file created → hook appends to pending queue → `/end` refuses to complete until every entry is indexed.
 - **Session docs skeleton** — `CURRENT_STATE.md`, `HANDOFF_LOG.md`, `CODEBASE_INDEX.md` with the conventions baked in.
+- **`.mcp.json.template`** — opt-in Cloudflare MCP server bundle (Workers Bindings, observability, browser rendering). Rename to `.mcp.json` and follow the inline comments to enable.
 
 ## How to apply to a new project
 
 1. **Copy files into the new project root.** The template mirrors the target layout — `.claude/` stays as-is, `docs/` stays as-is, the `.md` files go at the repo root.
 
-   PowerShell (Windows native):
+   First, set `KB_TEMPLATE_DIR` to wherever your Knowledge Base lives (one-time per shell, or persist via your profile / `[Environment]::SetEnvironmentVariable`):
+
+   PowerShell:
 
    ```powershell
+   $env:KB_TEMPLATE_DIR = "C:\path\to\Knowledge Base\claude-project-template"
    # from the new project's root:
-   robocopy "C:\Users\haith\Documents\Vibe Projects\Knowledge Base\claude-project-template" . /E /XD .git
+   robocopy "$env:KB_TEMPLATE_DIR" . /E /XD .git
    ```
 
    Git Bash / WSL / macOS / Linux:
 
    ```bash
+   export KB_TEMPLATE_DIR="$HOME/path/to/Knowledge Base/claude-project-template"
    # from the new project's root:
-   cp -r "C:/Users/haith/Documents/Vibe Projects/Knowledge Base/claude-project-template/." .
+   cp -r "$KB_TEMPLATE_DIR/." .
    ```
 
-   After copying, rename `.gitignore.template` → `.gitignore` and verify `.claude/pending-index-updates.txt` is empty (template ships drained; if not, empty it before `/end`).
+   After copying:
+   - Rename `.gitignore.template` → `.gitignore`.
+   - Verify `.claude/pending-index-updates.txt` is empty (template ships drained; if not, empty it before `/end`).
+   - If you plan to use Cloudflare MCP servers, rename `.mcp.json.template` → `.mcp.json` and follow the comments inside.
 
 2. **Customize `CLAUDE.md`** — search for `<ProjectName>`, `<project-name>`, and `<TODO>` markers. Fill in:
    - Project name + one-line purpose
@@ -37,13 +55,44 @@ A copy-in-and-customize skeleton for new projects that want the session protocol
 
 3. **Customize `PROTOCOL.md`** — generally works as-is. Only edit if your project has unusual session conventions.
 
-4. **Customize `.claude/commands/start.md` + `end.md`** — search for `<project-dir>` and replace with the absolute path to your new project. This is only used in the worktree-guard diagnostic message.
+4. **Customize `.claude/commands/start.md` + `end.md`** — these now use generic phrasing ("`cd` into your project root and run `claude`") so no path substitution is required. Edit only if you want to add project-specific guidance.
 
 5. **Prime the docs** — `docs/CURRENT_STATE.md` has placeholders for Day 1. `docs/HANDOFF_LOG.md` is just a header. `docs/CODEBASE_INDEX.md` starts empty but grows with every `/end` as the PostToolUse hook captures new files.
 
-6. **Verify the hook works** — open Claude Code in the new project, create a test file via `Write`, then check `.claude/pending-index-updates.txt` is non-empty. If yes, hook is live.
+6. **Verify the hook works** — open Claude Code in the new project, then ask it to `Write` a throwaway file at `tmp-hook-check.md`. Then read `.claude/pending-index-updates.txt`:
+   - **Contains `tmp-hook-check.md`** → hook is live. Delete the throwaway file and clear the pending entry.
+   - **Empty or missing** → hook didn't fire. See "Troubleshooting" below before continuing.
+
+   (An empty pending file in normal operation means "no undocumented files queued." Right after writing a brand-new file, it should be non-empty.)
 
 7. **Optional but recommended:** Add a `DECISIONS.md` at the repo root for architectural decision records. The `/end` protocol references it as the home for "pre-authorized push" consent and major tech choices.
+
+## Troubleshooting
+
+### Hooks don't seem to be firing
+
+Symptoms: you write a new file, but `.claude/pending-index-updates.txt` stays empty. Or `/end` completes despite undocumented files in the diff.
+
+Diagnostic order:
+
+1. **Confirm hook is wired.** `cat .claude/settings.json | python -c "import sys, json; print(json.load(sys.stdin)['hooks'].get('PostToolUse'))"`. Should print a non-empty list referencing `track-new-file.py`.
+2. **Confirm Python is on PATH.** Run `python --version` (or `python3 --version`) from inside Claude Code's Bash tool. The hook command in `settings.json` invokes `python` literally.
+3. **Confirm `CLAUDE_PROJECT_DIR` is set.** Inside Claude Code, run `python -c "import os; print(os.environ.get('CLAUDE_PROJECT_DIR'))"`. Empty output = hooks will silently no-op (the script returns early when the var is unset; see `track-new-file.py:68`).
+4. **Run the hook manually.** Pipe a synthetic event into the script:
+   ```bash
+   echo '{"tool_name":"Write","tool_input":{"file_path":"<absolute path to a test file>"}}' \
+     | CLAUDE_PROJECT_DIR=$(pwd) python .claude/scripts/track-new-file.py
+   ```
+   Then check `.claude/pending-index-updates.txt`. If this works manually but not in-session, the harness isn't passing the env var or isn't matching `Write|Edit`.
+5. **Check the matcher.** The hook is registered with matcher `Write|Edit`. If your Claude Code version uses a different tool name (e.g. `WriteFile`), the matcher misses every event silently.
+
+### `/end` reports paths as missing from the index, but the hook should have caught them
+
+This is Step 1b doing its job. The hook is the primary path; Step 1b is the belt-and-suspenders backstop that runs `git diff --name-only HEAD` + `git ls-files --others --exclude-standard`. Trust the backstop, add the missing entries, and add a "things to watch" note in `CURRENT_STATE.md` so next session knows the hook silently dropped events.
+
+### Worktree guard trips on every session
+
+You're on Claude Code Desktop, which force-creates worktrees. See the linked GitHub issue + Reddit workaround in `.claude/commands/start.md`. Or switch to the CLI.
 
 ## What's opinionated vs. generic
 

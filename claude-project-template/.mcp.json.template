@@ -1,0 +1,36 @@
+{
+  "$schema_note": "Rename this file to .mcp.json to enable. Each server is OPT-IN; comment-out (or delete) any block you don't want.",
+  "$why": "Cloudflare MCP servers let Claude introspect your live Workers/D1/R2/KV environment instead of you pasting wrangler output. See https://developers.cloudflare.com/agents/model-context-protocol/mcp-servers-for-cloudflare/ for the full bundle.",
+
+  "mcpServers": {
+    "cloudflare-bindings": {
+      "command": "npx",
+      "args": ["mcp-remote", "https://bindings.mcp.cloudflare.com/sse"],
+      "$comment": "Read/write D1 SQL, R2 objects, KV pairs, Hyperdrive. First call triggers OAuth in your browser to authorize against your CF account."
+    },
+
+    "cloudflare-observability": {
+      "command": "npx",
+      "args": ["mcp-remote", "https://observability.mcp.cloudflare.com/sse"],
+      "$comment": "Tail Worker logs, query analytics, inspect deploy history. Read-only."
+    },
+
+    "cloudflare-browser-rendering": {
+      "command": "npx",
+      "args": ["mcp-remote", "https://browser-rendering.mcp.cloudflare.com/sse"],
+      "$comment": "Headless Chrome inside a Worker — fetch rendered HTML, screenshots, PDFs. Useful when scraping or smoke-testing a deployed app."
+    },
+
+    "$disabled_filesystem_example": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "${CLAUDE_PROJECT_DIR}"],
+      "$comment": "Sandboxed FS access scoped to the project. Rename key to 'filesystem' to enable. Generally redundant with Claude Code's built-in Read/Edit/Write."
+    },
+
+    "$disabled_sequentialthinking_example": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
+      "$comment": "Helps the planner subagent on multi-step debugging. Rename key to 'sequentialthinking' to enable."
+    }
+  }
+}
