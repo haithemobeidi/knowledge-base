@@ -14,12 +14,21 @@ A copy-in-and-customize skeleton for new projects that want the session protocol
 
 1. **Copy files into the new project root.** The template mirrors the target layout — `.claude/` stays as-is, `docs/` stays as-is, the `.md` files go at the repo root.
 
+   PowerShell (Windows native):
+
+   ```powershell
+   # from the new project's root:
+   robocopy "C:\Users\haith\Documents\Vibe Projects\Knowledge Base\claude-project-template" . /E /XD .git
+   ```
+
+   Git Bash / WSL / macOS / Linux:
+
    ```bash
    # from the new project's root:
    cp -r "C:/Users/haith/Documents/Vibe Projects/Knowledge Base/claude-project-template/." .
    ```
 
-   (On Windows Git Bash; adjust for PowerShell with `robocopy`.)
+   After copying, rename `.gitignore.template` → `.gitignore` and verify `.claude/pending-index-updates.txt` is empty (template ships drained; if not, empty it before `/end`).
 
 2. **Customize `CLAUDE.md`** — search for `<ProjectName>`, `<project-name>`, and `<TODO>` markers. Fill in:
    - Project name + one-line purpose

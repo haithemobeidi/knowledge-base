@@ -12,3 +12,7 @@ Reusable patterns and lessons learned from vibe coding projects. Reference these
 - [tauri-desktop-oauth.md](./tauri-desktop-oauth.md) — Google OAuth in Tauri 2 desktop apps (localhost callback + bearer tokens). The flow, code, gotchas, what NOT to do.
 - [tauri-ipc-serde.md](./tauri-ipc-serde.md) — Always add `#[serde(rename_all = "camelCase")]` to Rust structs crossing the Tauri IPC boundary. Hidden `undefined`-field bug.
 - [cloudflare-worker-setup.md](./cloudflare-worker-setup.md) — Deploying a Cloudflare Worker + D1 from zero. Exact command sequence, secrets, CORS for native apps.
+
+## Decisions
+
+- [DECISIONS.md](./DECISIONS.md) — Append-only log of why this knowledge base is shaped the way it is. Read before adding a new lesson or restructuring.

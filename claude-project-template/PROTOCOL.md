@@ -159,6 +159,10 @@ Configured in `.claude/settings.json`:
 
 The hook script is silent on failure (never blocks Claude's work) and skips meta files (the index, current state, handoff log, anything inside `.claude/`, build outputs).
 
+### Statusline (not a hook, but wired in `settings.json`)
+
+`statusline.py` runs on every prompt-line render. It reads phase + build status from `docs/CURRENT_STATE.md` and adds the current branch + dirty-file count from git. Configured under the top-level `statusLine` key in `.claude/settings.json`, not `hooks` — listed here so every moving part of the template is documented in one place.
+
 ---
 
 ## Slash Commands
