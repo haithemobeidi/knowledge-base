@@ -84,7 +84,11 @@ If the new project doesn't have a git repo yet, ask before initializing. Once in
 
 - [tauri-desktop-oauth.md](./tauri-desktop-oauth.md) — Google OAuth in Tauri 2 desktop apps (localhost callback + bearer tokens). The flow, code, gotchas, what NOT to do.
 - [tauri-ipc-serde.md](./tauri-ipc-serde.md) — Always add `#[serde(rename_all = "camelCase")]` to Rust structs crossing the Tauri IPC boundary. Hidden `undefined`-field bug.
+- [tauri-sqlite-direct-sqlx.md](./tauri-sqlite-direct-sqlx.md) — Opening your own sqlx pool alongside `tauri-plugin-sql`. Plus the migration-not-registered footgun that shipped a silent feature regression.
 - [cloudflare-worker-setup.md](./cloudflare-worker-setup.md) — Deploying a Cloudflare Worker + D1 from zero. Exact command sequence, secrets, CORS for native apps.
+- [local-first-sync-with-d1.md](./local-first-sync-with-d1.md) — 13 patterns for building local-first sync against Cloudflare D1: field-level outbox, UUID identity, user-scoped writes, Worker-side defense, chunking that doesn't split row identity, tombstones with matched retention. The ones that survived production.
+- [webview2-react-render-traps.md](./webview2-react-render-traps.md) — Eight WebView2/Tauri render gotchas not present in Chrome dev: image lazy-load intervention, `key={id}` for fresh GPU layers, useLayoutEffect-mandatory for measurement, drag-region clearance, portal-to-body for modals, scrollbar gutter, image pre-decode for flight animations.
+- [mobile-shell-decision.md](./mobile-shell-decision.md) — Decision record: webview wrapper (Capacitor) vs native (SwiftUI + Compose) for mobile when your desktop is React. The reversal we made, why, and the framework for picking next time.
 
 ## Decisions & references
 

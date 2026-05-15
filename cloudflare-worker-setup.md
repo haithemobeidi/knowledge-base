@@ -1,7 +1,7 @@
 ---
 stack: [cloudflare-worker, d1, wrangler]
 kind: recipe
-last_verified: 2026-04-13
+last_verified: 2026-05-14
 ---
 
 # Cloudflare Worker + D1 Setup (from zero to deployed)
@@ -125,6 +125,8 @@ Runs on `http://localhost:8787`. Use `--local` to use a local D1 mirror; without
 6. **wrangler.toml changes don't require redeploy to take effect locally** — just restart `wrangler dev`. But remote changes always need `wrangler deploy`.
 
 7. **Check the deployed Worker version** — `wrangler deployments list` shows history. `wrangler rollback <version-id>` reverts.
+
+8. **wrangler crashes on ARM64 Windows hosts** — on Snapdragon X / ARM64 Windows machines (Surface Pro 11, etc.), `wrangler tail` and `wrangler deploy` both crash with a native binary error. The Node.js binary wrangler ships uses an x64-only native module. **Fix: run wrangler from WSL** (`wsl bash -c "cd /mnt/c/... && npx wrangler deploy"`) or from a separate x64 dev machine. We hit this when deploying from an ARM64 laptop in May 2026; WSL runs the x64 binary fine under emulation. As of writing (2026-05) there is no native ARM64 wrangler build.
 
 ## Quick health check endpoint
 

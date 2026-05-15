@@ -1,7 +1,7 @@
 ---
 stack: [tauri, better-auth, cloudflare-worker]
 kind: howto
-last_verified: 2026-04-13
+last_verified: 2026-05-14
 ---
 
 # Desktop OAuth for Tauri 2 Apps (Windows/macOS/Linux)
@@ -190,6 +190,20 @@ app.post('/api/auth/exchange-code', async (c) => {
 3. **Rust `#[serde(rename_all = "camelCase")]`** — if your Tauri commands return structs with multi-word fields, add this attribute or the JS side will see `undefined` for `logged_in` instead of `loggedIn`
 4. **better-auth token format** — if using better-auth's `bearer()` plugin, session tokens must be HMAC-SHA256 signed with base64url-no-pad encoding (not standard base64). The plugin uses `createHMAC("SHA-256", "base64urlnopad")` for verification.
 5. **Google propagation delay** — after adding a redirect URI in Google Cloud Console, it can take 5 minutes to several hours to propagate. Usually < 2 minutes for new URIs.
+
+6. **Listener stays bound if user closes the browser tab mid-flow** — the most common production bug with this pattern. If the user clicks Sign in, the browser opens, and then they close the tab before completing OAuth (or kill it because they changed their mind), the localhost listener on your fixed port stays bound. Subsequent sign-in attempts fail with "address already in use" until the app is fully restarted. **Mitigation**: wrap the `start()` + `onUrl()` flow with a ~2-minute timeout that calls `unlisten()` + `cancel(port)`, plus surface a Cancel button in the UI that triggers the same teardown. The naive "user will come back to the tab" assumption fails ~10% of the time in practice.
+
+   ```typescript
+   const TIMEOUT_MS = 2 * 60 * 1000;
+   const timeoutId = setTimeout(() => {
+     unlisten();
+     cancel(port).catch(() => {});
+     setSignInError('Sign-in timed out. Try again.');
+   }, TIMEOUT_MS);
+
+   // Inside onUrl callback, clearTimeout(timeoutId) before the exchange call.
+   // Inside the Cancel button handler, do the same teardown + clearTimeout.
+   ```
 
 ## Reference Implementation Layout
 
