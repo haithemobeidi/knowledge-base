@@ -129,28 +129,68 @@ pub async fn sync_set_user_id(pool: &SqlitePool, user_id: String) -> Result<(), 
 
 Pattern 3 prevents leaks at the client. But a buggy or compromised client could send pushes tagged with the wrong user. The Worker MUST defend independently.
 
-Before applying any row from a push, batch-SELECT all incoming uuids per table and reject any group whose uuid already belongs to a **different** user in cloud:
+Before applying any row from a push, batch-SELECT all incoming uuids per table. The naive predicate is the trap — **the correct predicate is subtler than it looks**:
+
+### Wrong predicate (rejects legitimate writes)
 
 ```typescript
-// Inside push handler, before applying changes
-const incomingUuids = changes.map(c => c.uuid).filter(Boolean);
-const owners = await env.DB
-  .prepare(`SELECT uuid, user_id FROM games WHERE uuid IN (${placeholders})`)
-  .bind(...incomingUuids)
-  .all<{ uuid: string; user_id: string }>();
-
-const owned = new Map(owners.results.map(r => [r.uuid, r.user_id]));
-for (const change of changes) {
-  if (change.uuid && owned.has(change.uuid) && owned.get(change.uuid) !== currentUserId) {
-    rejected++;
-    errors.push(`uuid ${change.uuid} already owned by another user`);
-    continue;
+// ❌ DON'T: reject if ANY other user has this uuid
+for (const row of leakRows) {
+  if (row.user_id !== currentUserId) {
+    rejectGroup(row.uuid);  // bug: also rejects when current user ALSO owns the uuid
   }
-  // ...apply change
 }
 ```
 
-Cost: one extra batched read per push, no extra round-trip. Equivalent to row-level security in Postgres (which you can't enforce declaratively in D1).
+This fails on the **historical-pollution case**: a uuid that exists under BOTH the current user (legitimately) AND another user (from a pre-fix leak). The legitimate write gets blocked because the predicate sees the foreign-user row first.
+
+### Correct predicate (group by uuid, check ownership across all rows)
+
+```typescript
+// ✅ DO: reject only if another user owns it AND I don't
+const ownersByUuid = new Map<string, { hasMe: boolean; otherCount: number }>();
+for (const row of leakRows) {
+  const e = ownersByUuid.get(row.uuid) ?? { hasMe: false, otherCount: 0 };
+  if (row.user_id === currentUserId) e.hasMe = true;
+  else e.otherCount += 1;
+  ownersByUuid.set(row.uuid, e);
+}
+
+for (const [uuid, owners] of ownersByUuid) {
+  if (owners.hasMe) continue;       // I own it — accept (pollution case OR normal update)
+  if (owners.otherCount === 0) continue;  // No conflict — fall through to INSERT
+  rejectGroup(uuid);                // Exclusively another user's — REJECT
+}
+```
+
+The downstream `UPDATE ... WHERE user_id = ? AND uuid = ?` is the actual cross-user isolation backstop. This check is just the early "fail fast" guard — it's safe to accept the pollution case because the SQL WHERE clause physically prevents touching another user's row regardless.
+
+### CRITICAL: ordering matters — run this AFTER identity reconciliation
+
+If your push pipeline also has a "steam_appid identity reconciliation" phase (Pattern 10 sibling — rewriting incoming uuid to the user's canonical uuid when steam_appid matches), **that phase MUST run BEFORE the cross-user check**. Otherwise:
+
+1. Incoming uuid is from device X's local DB (pre-reconciliation).
+2. Cross-user check sees uuid belongs to another user, REJECTS.
+3. Phase that would have rewritten the uuid to the current user's canonical never runs.
+
+```typescript
+// Correct pipeline order:
+// Phase 1:   group + validate
+// Phase 1.5: steam_appid reconciliation (mutate group.uuid to current user's canonical)
+// Phase 1.7: cross-user uuid leak check (uses POST-mutation uuid)
+// Phase 2:   apply LWW + write batch
+```
+
+Cost: one extra batched read per push (the leak check), no extra round-trip. Equivalent to row-level security in Postgres (which you can't enforce declaratively in D1).
+
+### Sign-off cases for the correct predicate
+
+| Cloud state for incoming uuid | Decision | Why |
+|---|---|---|
+| Nobody has it | ACCEPT | New row — let INSERT OR IGNORE handle it |
+| Only I have it | ACCEPT | Normal update on my row |
+| Another user has it, I don't | REJECT | Attack / forged uuid — defense fires |
+| Both another user AND I have it | ACCEPT | Pollution case — my UPDATE only touches my row |
 
 ---
 

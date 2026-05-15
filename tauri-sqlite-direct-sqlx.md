@@ -170,6 +170,84 @@ async fn assert_schema(pool: &SqlitePool) {
 
 Call from your setup hook. ~2ms total at boot, catches the entire class of "I forgot to register the migration" bugs the instant you launch the app.
 
+## The `selectRows()` snake_case → camelCase remap trap
+
+If your project layers a typed query helper on top of `tauri-plugin-sql` that auto-converts SQL column names from snake_case to camelCase (idiomatic for Drizzle-defined schemas where `steam_appid` in SQL = `steamAppid` in TS), **every Zod schema downstream MUST use camelCase**, not the SQL column name.
+
+This is a near-invisible failure mode. The Zod error reads `expected number, received undefined` at path `[0, "steam_appid"]` — which looks like "the data is bad" rather than "I asked for a key that no longer exists in the remapped row."
+
+### The trap
+
+```typescript
+// lib/db.ts — the snake→camel remap happens here
+function remapRow(row: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(row)) {
+    out[snakeToCamel(k)] = v;  // steam_appid → steamAppid
+  }
+  return out;
+}
+
+export async function selectRows(sql: string, params: unknown[] = []) {
+  const db = await getDb();
+  const raw = await db.select<Record<string, unknown>[]>(sql, params);
+  return raw.map(remapRow);  // returns camelCase keys
+}
+
+// features/sync/outbox.ts — the schema mismatch
+const steamAppidLookupRowsSchema = z.array(
+  z.object({ steam_appid: z.number().int().nullable() }),  // ❌ snake_case
+);
+
+async function lookupGameSteamAppid(rowId: number): Promise<number | null> {
+  const rows = steamAppidLookupRowsSchema.parse(
+    await selectRows('SELECT steam_appid FROM games WHERE id = ?', [rowId]),
+    // selectRows returned [{ steamAppid: 306130 }]
+    // schema expected [{ steam_appid: ... }]
+    // Zod throws "expected number, received undefined"
+  );
+  return rows[0]?.steam_appid ?? null;
+}
+```
+
+### The fix
+
+```typescript
+const steamAppidLookupRowsSchema = z.array(
+  z.object({ steamAppid: z.number().int().nullable() }),  // ✅ camelCase
+);
+
+async function lookupGameSteamAppid(rowId: number): Promise<number | null> {
+  const rows = steamAppidLookupRowsSchema.parse(
+    await selectRows('SELECT steam_appid FROM games WHERE id = ?', [rowId]),
+  );
+  return rows[0]?.steamAppid ?? null;  // ✅ camelCase accessor
+}
+```
+
+The SQL column name in the SELECT stays snake_case (that's the source-of-truth schema). Only the Zod schema and the JS-side accessor switch to camelCase to match the post-remap shape.
+
+### Why this hides for so long
+
+The trap is universal across any single-column lookup — `userId`, `parentUuid`, `steamAppid`, anything multi-word. But single-word columns like `uuid`, `value`, `name` round-trip cleanly because snake_case = camelCase. So your codebase can have 10 working lookup helpers and one silently broken one that only blows up on a code path that returns multi-word columns.
+
+The failure was masked at the call site too — single-field updates emitting `.catch(() => {})` (the "fire and forget outbox write" pattern) swallowed every Zod error for weeks. Bug surfaced only when we instrumented `trackChanges` to push every success/failure into an in-app debug pipeline.
+
+### How to audit
+
+```bash
+# Find every Zod schema that uses snake_case keys after a selectRows-style helper
+rg 'z\.object\(\{\s*\w+_\w+:' src/
+```
+
+Then for each match, check whether the matching `selectRows` call returns remapped rows. The snake_case → camelCase remap is almost always centralized — finding it once tells you the whole codebase's convention.
+
+### Pair with observable error surfaces
+
+Don't write `.catch(() => {})` on outbox emissions. Even a `console.error` is enough to catch this class of bug in F12. Better: route to a structured dev-event ring buffer that survives panel closure (`pushDevEvent(...)` pattern). Silent-fail outbox writes can hide for entire release cycles.
+
+---
+
 ## Common gotchas
 
 1. **`sqlx::query` vs `sqlx::query_as` for typed rows.** If you want typed structs, derive `sqlx::FromRow` and use `query_as::<_, MyStruct>(...)`. For ad-hoc reads, plain `query` returns `SqliteRow` and you call `.get::<T, _>("col")` per field.
