@@ -80,19 +80,27 @@ The repo ships three layers of documentation. Each has a specific purpose and a 
 
 ## Work style — long-form rules live in `docs/WORK_STYLE.md`
 
-To keep this file lean, three dense work-style rules now live in [`docs/WORK_STYLE.md`](./docs/WORK_STYLE.md). Read that file on demand when the trigger applies; it is **not** auto-loaded.
+To keep this file lean, the dense work-style rules now live in [`docs/WORK_STYLE.md`](./docs/WORK_STYLE.md). Read that file on demand when the trigger applies; it is **not** auto-loaded.
 
 | Rule | Read it when |
 |---|---|
 | **Mock before you build** (UI projects only) | Before designing any new screen or layout change. |
 | **Don't reinvent the wheel** | Before designing any non-trivial component — search OSS / reference repos for prior art first. |
 | **Pause at natural test milestones** | Before starting any sub-phase. Declare 2–4 pause-points up front; stop at each one for live testing. |
+| **Grounded pushback + grounded agreement** | Any time you express an opinion (pro or con) on the user's idea. |
+| **One source of truth — data AND behavior** | Before changing any read/write path or making multiple surfaces display the same concept. |
+| **Methodical pacing — V1 perfect > V1 fast** | Always. Long-horizon projects favor more pause-points; never rush. |
+| **Audits target real optimization** | Before starting any audit/cleanup pass. |
 
 Quick summary of each so the trigger lands even without reading the full file:
 
 - **Mock first** — new UI lands in the HTML prototype before real code; user signs off on the prototype, then you build.
 - **Search first** — for any "this must have been solved before" problem, spend up to 10 minutes finding prior art before designing from scratch.
 - **Pause first** — declare pause-points before writing code; stop at each milestone (form renders, IPC roundtrips, error surfaces) for live test before continuing. Hard safety net: stop after 4+ new files or 300+ lines without hitting one.
+- **Grounded both ways** — disagreement and agreement both cite real evidence (code in repo, comparable apps, prior decisions, OSS prior art). No sycophancy. No performative devil's-advocate. Subjective calls flagged as such.
+- **One source of truth** — every concept has one authoritative data location AND one behavior spec; when touching a read/write/pre-fill path, audit ALL surfaces for parity (overlay, main form, settings panel, etc.).
+- **Methodical pacing** — long-horizon projects favor MORE pause-points; never rush. Pause-points must leave surfaces complete — no "ship now, iterate later" defaults that leave half-baked UX.
+- **Audits real, not theatre** — audit findings need measurable best-practice gains, not theoretical "could be faster" hand-waving. If you can't name the win, skip the change.
 
 ---
 

@@ -7,6 +7,10 @@ These are the long-form work-style rules for the project. They were extracted fr
 - **Before starting a new sub-phase** → read the "pause at natural test milestones" section so you declare pause-points correctly.
 - **Before designing a new screen or layout change** → read the "mock before you build" section (UI projects only).
 - **Before designing any non-trivial component** → read "don't reinvent the wheel" — the search-first checklist.
+- **Any time you push back on or agree with a user's idea** → read "grounded pushback + grounded agreement".
+- **Before changing a read/write path or coordinating multiple surfaces** → read "one source of truth — data AND behavior".
+- **Always, but especially before suggesting "let's ship and iterate"** → read "methodical pacing — V1 perfect > V1 fast".
+- **Before starting an audit / cleanup pass** → read "audits target real optimization".
 
 `CLAUDE.md` references this file by name in each relevant rule; you do not need to read it on every session.
 
@@ -76,7 +80,9 @@ UI/UX-sensitive projects need live testing — screens need to be pressed, anima
 
 5. **Use the pause for live feedback.** If the user reports something feels wrong (layout, copy, interaction, missing affordance), fix it immediately before moving on — course-correcting mid-phase is cheaper than mid-project.
 
-6. **Skip the rule only for invisible work.** Pure refactors, docs, dep bumps, CI wiring, formatting passes, and protocol-bookkeeping commits have nothing the user can click — don't fake a milestone for them.
+6. **Skip the rule only for invisible work.** Pure refactors, docs, dep bumps, CI wiring, formatting passes, and protocol-bookkeeping commits have nothing the user can click — don't fake a milestone for them. **Prototype/mock iteration also skips this rule** — HTML mocks run straight through; pause once at the end of the mock track for user sign-off, not between revisions.
+
+7. **Pause names use plain letters (A, B, C, ...), not Greek.** Keep the sequence continuous across mock/impl blocks of the same milestone (e.g. mocks land at A–C, React impl picks up at D–F). Greek letters confuse the user when re-referencing across sessions.
 
 ### What counts as a sub-phase
 
@@ -87,3 +93,85 @@ A sub-phase is any unit of work small enough to fit in one `/end` commit but lar
 - Refactors that span more than one feature folder
 
 If the work is smaller than that — a one-line fix, a typo, a single dep bump — the pause-point rule doesn't apply. Just do it.
+
+---
+
+## Grounded pushback + grounded agreement
+
+Disagreement and agreement both require evidence. Treat them as the same bar, not different bars.
+
+**When you push back on a user's idea**, cite real evidence:
+- Code already in the repo that handles it
+- Comparable apps that solved the same problem differently (and link them)
+- Prior decisions in `DECISIONS.md` that explain why we went a certain way
+- OSS prior art for the pattern
+- A specific failure mode the proposed approach exposes
+
+"That might cause issues" without specifics is not grounded — it's hedging.
+
+**When you agree with a user's idea**, cite the same kind of evidence:
+- The existing code shape supports it cleanly
+- A comparable app does exactly this and it works
+- It matches a prior decision
+
+"That sounds good" without specifics is sycophancy — equally useless.
+
+**Subjective calls** (visual preference, naming, scope tradeoffs) should be flagged as such: *"This is subjective — I'd lean X because Y, but it's your call."* The flag is what makes it honest. Pretending a subjective call is objective is the same failure mode in disguise.
+
+**The trap to avoid:** performative devil's-advocate. "I should push back on this so I seem thoughtful" is just as bad as sycophancy. Disagreement-for-the-sake-of-disagreement burns the user's time. The bar is the same in both directions — real evidence or flag it as subjective.
+
+---
+
+## One source of truth — data AND behavior, across all surfaces
+
+Every concept in the project has TWO authoritative locations: a data location (where the value is stored / read from) and a behavior spec (what the UI does with it). Both must be singular.
+
+**The trap:** the data layer gets one source of truth (good) but the same concept gets re-implemented across overlay, settings panel, quit ritual, etc. with subtly different behavior. Saving from the main form respects validation; saving from the quit ritual skips it. Pre-fill on the overlay reads field A; pre-fill on the main form reads fields A and B. Each surface looks reasonable in isolation; the inconsistency only shows up when a user moves between them and breaks something.
+
+**How to apply when touching a read/write/pre-fill path:**
+
+1. **List every surface that touches this concept.** Overlay, main form, quit ritual, debug screen, settings panel — wherever the user interacts with this value.
+2. **Audit each for parity.** Does the validation match? The pre-fill logic? The save semantics? The error handling? The undo behavior?
+3. **Pick the canonical behavior.** Usually the most-used surface defines the spec.
+4. **Bring every other surface in line with that spec**, or document the deviation in `DECISIONS.md` with a reason.
+5. **If the data shape changes (schema migration, new field)**, sweep all surfaces in the same commit. Drift is cheaper to prevent than to fix once it ships.
+
+**What this is NOT:** "extract every duplicated function into a shared helper." DRY-by-3 still applies. This is about *behavioral* consistency across surfaces that necessarily have their own UI code — not about eliminating code duplication.
+
+---
+
+## Methodical pacing — V1 perfect > V1 fast
+
+Long-horizon projects (months, not weeks) reward methodical pacing. Rushing a sub-phase costs more than the time it saved, because half-baked surfaces accumulate technical debt and "ship now, iterate later" rarely circles back.
+
+**How to apply:**
+
+- **Default to MORE pause-points, not fewer.** When in doubt about whether something deserves a pause, add one. The cost of an unnecessary pause is a one-line user reply; the cost of a missing pause is a 15-file blind-review handoff.
+- **No "ship now, iterate later" defaults.** Every pause-point must leave its surface complete — fully functional, no obvious gaps, no "we'll fix the empty state next time." If a surface isn't complete at a pause, you haven't reached the pause yet.
+- **Resist the urge to batch work** to feel more productive. Three separate pauses that each ship cleanly are better than one fast pause that ships three half-finished features.
+- **Pace cues from the user matter more than progress velocity.** If the user explicitly says "we have time, let's do this properly," that's the signal to add more checkpoints, not the signal to keep moving.
+- **The bar for "done" is the user's expectations**, not the code's working state. Code that compiles and renders is not "done" if the UX feels half-built.
+
+**What this is NOT:** an excuse to gold-plate or over-engineer. Methodical pacing is about quality at each pause-point, not adding hypothetical scope.
+
+---
+
+## Audits target real optimization
+
+Audit passes (file size cleanup, DRY violations, dead code, dependency drift, security review) are valuable when they target measurable wins. They're wasteful when they're change-for-change's-sake.
+
+**Before starting an audit pass**, name the win:
+- "Split this 850-line file because X has been added since the last split and a new section makes it worse" — real win.
+- "Three identical 30-line blocks across these files; extracting them removes a known drift hazard" — real win.
+- "This dep has a CVE patched in N+1" — real win.
+- "This could be faster" — not a win. Faster how? By how much? Measured against what?
+- "This pattern is old; the modern version is X" — not a win on its own. Does X measurably reduce LOC, surface fewer bugs, or improve type safety?
+
+**Audit anti-patterns to avoid:**
+
+- **Reshuffling without a measurable improvement.** Moving code around because the new shape "feels cleaner" but no one can name what got better.
+- **Eliminating duplication that isn't drift-prone.** Two instances of similar-looking code that haven't drifted in a year don't need extraction.
+- **Adding abstractions for hypothetical future reuse.** If only 1 caller exists, the abstraction is wrong shape until a 2nd caller validates it.
+- **Sweeping all 800-line files at once.** Pick the worst offender; ship that; gather feedback before sweeping the next.
+
+**Audit scope:** by default, audits cover production code only (`apps/`, `packages/` or equivalent). They EXCLUDE prototypes/mocks (`docs/design/prototype/` etc.) unless the user explicitly points at them. Prototype code is throwaway iteration; auditing it wastes effort.

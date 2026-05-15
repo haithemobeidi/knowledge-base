@@ -38,8 +38,9 @@ Execute these steps in order:
 1. Read `docs/CURRENT_STATE.md` for the latest project snapshot.
 2. Read the last 5 lines of `docs/HANDOFF_LOG.md` for recent session summaries.
 3. Run `git update-index --really-refresh > /dev/null 2>&1 || true` to clear phantom-dirty stat entries — files git thinks are modified but are byte-identical to HEAD. Stale mtimes can come from any fresh checkout, and the refresh is a cheap no-op when there's nothing to do. Then run `git status` and `git log --oneline -5`. If `git status` still shows changes after the refresh, those are real and must be surfaced to the user in Step 5 — they indicate the previous `/end` did not achieve a clean tree, which is a protocol violation to flag.
-4. Read `ROADMAP.md` only if you need context on what phase we're on.
-5. Report a 3-line status to the user:
+4. Run the project's security audit command (e.g. `pnpm audit --prod`, `npm audit`, `cargo audit`). Silent on green — only mention if there are non-zero findings.
+5. Read `ROADMAP.md` only if you need context on what phase we're on.
+6. Report a 3-line status to the user:
    - Current phase / sub-phase
    - What was accomplished last session
    - What's blocking, or what's next

@@ -1,7 +1,7 @@
 ---
 stack: [tauri, react, webview2]
 kind: gotcha
-last_verified: 2026-05-14
+last_verified: 2026-05-15
 ---
 
 # WebView2 + React render traps — gotchas that don't exist in Chrome dev
@@ -222,6 +222,112 @@ Single-RAF works most of the time but isn't reliable on WebView2 — the layout 
 
 ---
 
+## Trap 9: `setInterval` updates ONE piece of state but not the others derived from the same source
+
+**Symptom:** a UI panel polls some backend status every N seconds and updates correctly — except one field that refuses to refresh. It stays frozen at whatever value loaded at mount. No error in console, no devtools warning, no failed fetch. The data is fresh server-side; the panel shows it in some places and stale in others.
+
+**Cause:** a `setInterval` callback runs `setState(...)` for some derived values but forgets to also update others derived from the same source. Mount-time logic might initialize all of them via a single `checkStatus()` call, but the interval poll only refreshes the subset the original author remembered to wire up. The subset that's missing stays stuck at its mount-time value forever.
+
+This is React state-management hygiene, not a WebView2 quirk — but it surfaces in this list because long-lived desktop apps have far more polling intervals than typical web apps (sync status, active-game watcher, network online/offline, OAuth token expiry). Each interval is a separate opportunity to miss a setter.
+
+**The trap:**
+
+```tsx
+function StatusPanel() {
+  const [state, setState] = useState<SyncState | null>(null);
+  const [lastSync, setLastSync] = useState<number | null>(null);
+
+  // Mount: both setters fire from one fetch
+  useEffect(() => {
+    checkStatus().then((r) => {
+      setState(r.state);
+      setLastSync(r.lastSyncedAt);  // ← runs at mount
+    });
+
+    // Interval: only ONE setter fires
+    const id = setInterval(() => {
+      checkStatus().then((r) => {
+        setState(r.state);  // ❌ forgot to also call setLastSync
+      });
+    }, 3000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <>
+      <div>State: {state}</div>
+      <div>Last synced: {lastSync ? formatTime(lastSync) : '—'}</div>
+      {/* ← this is stuck at the mount-time value forever */}
+    </>
+  );
+}
+```
+
+The trap is invisible because:
+- The mount-time path works perfectly. First render shows correct data.
+- The interval path also works for the OTHER state. So `state` updates correctly every 3s.
+- The user sees `state` change and trusts the panel is live. They don't notice `lastSync` is frozen.
+- No error, no warning, no exception. React doesn't track "you fetched this value but never set state for it."
+
+**Fix:**
+
+```tsx
+const id = setInterval(() => {
+  checkStatus().then((r) => {
+    setState(r.state);
+    setLastSync(r.lastSyncedAt);  // ✅ refresh ALL derived state
+  });
+}, 3000);
+```
+
+**Better fix — collapse the two paths into one helper so they can't drift:**
+
+```tsx
+async function refreshStatus() {
+  const r = await checkStatus();
+  setState(r.state);
+  setLastSync(r.lastSyncedAt);
+}
+
+useEffect(() => {
+  refreshStatus();
+  const id = setInterval(refreshStatus, 3000);
+  return () => clearInterval(id);
+}, []);
+```
+
+Now there's exactly ONE place that maps the fetch result to component state. Adding a new field forces you to touch the helper, which means the interval picks it up automatically.
+
+**Even better — single state object instead of multiple `useState` calls:**
+
+```tsx
+const [status, setStatus] = useState<{ state: SyncState | null; lastSync: number | null }>({
+  state: null,
+  lastSync: null,
+});
+
+async function refreshStatus() {
+  const r = await checkStatus();
+  setStatus({ state: r.state, lastSync: r.lastSyncedAt });
+}
+```
+
+One setState call, one source of truth. The "miss a setter" failure mode is eliminated by construction.
+
+**How to audit existing code:**
+
+Search for `setInterval` and check each one against the mount-time initialization for the same component:
+
+```bash
+rg 'setInterval' src/ -l | xargs -I{} grep -H -A 30 'setInterval' {}
+```
+
+For each match, look at every `useState` in the file. If a state variable is set during mount but NOT inside the interval callback, it's almost certainly the bug — unless the value is truly immutable post-mount (and even then, prefer `useMemo` over `useState` for that).
+
+**Related but distinct:** stale closures from missing dependency arrays. `setInterval(() => setX(x + 1), 1000)` captures `x` at mount. The fix is `setX(prev => prev + 1)`. This is a different bug from the setter-mismatch above — Trap 9 is specifically about missing setter *calls*, not stale closure values.
+
+---
+
 ## Symptoms → cause quick reference
 
 | Symptom | Likely trap |
@@ -234,6 +340,7 @@ Single-RAF works most of the time but isn't reliable on WebView2 — the layout 
 | 15px horizontal jump when opening modals | Trap 6 — `scrollbar-gutter: stable` |
 | Flight/morph shows blank frame mid-animation | Trap 7 — pre-decode the image |
 | `getBoundingClientRect()` returns wrong rect | Trap 8 — separate mutation and measurement |
+| Polled panel updates some fields, others stay frozen | Trap 9 — interval callback misses a setter |
 
 ---
 

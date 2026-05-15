@@ -89,6 +89,7 @@ If the new project doesn't have a git repo yet, ask before initializing. Once in
 - [local-first-sync-with-d1.md](./local-first-sync-with-d1.md) — 13 patterns for building local-first sync against Cloudflare D1: field-level outbox, UUID identity, user-scoped writes, Worker-side defense, chunking that doesn't split row identity, tombstones with matched retention. The ones that survived production.
 - [webview2-react-render-traps.md](./webview2-react-render-traps.md) — Eight WebView2/Tauri render gotchas not present in Chrome dev: image lazy-load intervention, `key={id}` for fresh GPU layers, useLayoutEffect-mandatory for measurement, drag-region clearance, portal-to-body for modals, scrollbar gutter, image pre-decode for flight animations.
 - [mobile-shell-decision.md](./mobile-shell-decision.md) — Decision record: webview wrapper (Capacitor) vs native (SwiftUI + Compose) for mobile when your desktop is React. The reversal we made, why, and the framework for picking next time.
+- [cross-boundary-dev-events.md](./cross-boundary-dev-events.md) — Structured dev-event ring buffer that captures events from both sides of the Rust ↔ TS boundary. Catches silent failures (swallowed errors, missed setters, hidden 200-with-rejection responses) that `console.log` can't because it dies the moment F12 closes.
 
 ## Decisions & references
 

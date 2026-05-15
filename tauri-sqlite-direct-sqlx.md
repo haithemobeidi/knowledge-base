@@ -1,7 +1,7 @@
 ---
 stack: [tauri, rust, sqlite, sqlx]
 kind: howto
-last_verified: 2026-05-14
+last_verified: 2026-05-15
 ---
 
 # Tauri + SQLite with direct sqlx access (alongside tauri-plugin-sql)

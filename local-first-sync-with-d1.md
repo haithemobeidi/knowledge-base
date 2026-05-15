@@ -1,7 +1,7 @@
 ---
 stack: [cloudflare-worker, d1, sqlite, tauri]
 kind: architecture
-last_verified: 2026-05-14
+last_verified: 2026-05-15
 ---
 
 # Local-First Sync to Cloudflare D1 — Patterns that survived contact with reality

@@ -36,8 +36,9 @@ The user can still type `/start` explicitly to force the full protocol (e.g. aft
 1. **Worktree guard first** — if cwd contains `.claude/worktrees/` OR the branch starts with `claude/`, STOP and tell the user. Do not proceed with any other steps. (See `.claude/commands/start.md` for the exact verbatim message.) The SessionStart hook also catches this, but typing `/start` re-runs the check.
 2. If `CURRENT_STATE.md` and the last 5 handoff lines are NOT already in context (the SessionStart hook would have injected them), read them now.
 3. Run `git update-index --really-refresh` (clears phantom-dirty stat entries), then `git status` and `git log --oneline -5`. If `git status` still shows changes after the refresh, those are real and must be surfaced to the user — they indicate the previous `/end` did not achieve a clean tree, which is a protocol violation worth flagging.
-4. Read `ROADMAP.md` only if you need context on the current phase.
-5. Report a 3-line status to the user:
+4. **Security audit on session start.** Run the package-manager's audit command for the project's primary lockfile (`pnpm audit --prod`, `npm audit`, `cargo audit`, etc.). Report only if non-zero findings — silent on green. Catches supply-chain regressions before they ride into the next session's work.
+5. Read `ROADMAP.md` only if you need context on the current phase.
+6. Report a 3-line status to the user:
    - Current phase / sub-phase
    - What was accomplished last session
    - What's blocking, or what's next
@@ -65,6 +66,16 @@ The user can still type `/start` explicitly to force the full protocol (e.g. aft
 - Every time you `Write` or `Edit` a file whose path is **not yet in `docs/CODEBASE_INDEX.md`**, a `PostToolUse` hook appends the path to `.claude/pending-index-updates.txt`. Already-indexed files are ignored, so editing existing files never re-queues them.
 - The `/end` command **cannot complete** while that file is non-empty.
 - This replaces the discipline-based approach that failed in past projects.
+
+### Docs updates: at `/end` only, never mid-session
+- `docs/CODEBASE_INDEX.md`, `docs/CURRENT_STATE.md`, and `docs/HANDOFF_LOG.md` get refreshed at `/end`. Do NOT edit them mid-session.
+- **Why:** pause-point feedback during a session can reframe the work (a bug surfaces, scope shifts, a feature gets split into two phases). Doc edits made mid-session get rewritten by the time `/end` lands, and the intermediate version pollutes git history.
+- The hook still queues new-file pending entries mid-session — that's the bookkeeping mechanism, not user-facing docs.
+
+### Check stale messages before re-changing
+- After a fix lands, ask the user whether the issue is still happening before changing the code again.
+- **Why:** the user may have queued a follow-up message before testing your previous fix. Acting on the queued message blindly re-changes code that's already correct. Confirm the issue is current before iterating.
+- Phrasing: "Just confirming — does it still <repro>? Or was that an earlier observation before the last fix landed?"
 
 ---
 
