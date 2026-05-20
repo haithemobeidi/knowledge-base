@@ -90,6 +90,7 @@ If the new project doesn't have a git repo yet, ask before initializing. Once in
 - [webview2-react-render-traps.md](./webview2-react-render-traps.md) — Eight WebView2/Tauri render gotchas not present in Chrome dev: image lazy-load intervention, `key={id}` for fresh GPU layers, useLayoutEffect-mandatory for measurement, drag-region clearance, portal-to-body for modals, scrollbar gutter, image pre-decode for flight animations.
 - [mobile-shell-decision.md](./mobile-shell-decision.md) — Decision record: webview wrapper (Capacitor) vs native (SwiftUI + Compose) for mobile when your desktop is React. The reversal we made, why, and the framework for picking next time.
 - [cross-boundary-dev-events.md](./cross-boundary-dev-events.md) — Structured dev-event ring buffer that captures events from both sides of the Rust ↔ TS boundary. Catches silent failures (swallowed errors, missed setters, hidden 200-with-rejection responses) that `console.log` can't because it dies the moment F12 closes.
+- [restartable-task-generation-counter.md](./restartable-task-generation-counter.md) — Atomic generation counter for safely restarting threads / async tasks / child processes without leaking the old instance. Survives React StrictMode double-mounts and stop/start races. Extracted from Checkpoint's process monitor; LLM Hub uses it for sidecar restart.
 
 ## Decisions & references
 
