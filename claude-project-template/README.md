@@ -6,7 +6,7 @@ A copy-in-and-customize skeleton for new projects that want the session protocol
 
 The template's hooks rely on one harness-provided environment variable:
 
-- **`CLAUDE_PROJECT_DIR`** — the absolute path of the project root. Claude Code sets this automatically when launching, so the four Python hook scripts in `.claude/scripts/` resolve project-relative paths correctly. **You should not need to set it yourself.**
+- **`CLAUDE_PROJECT_DIR`** — the absolute path of the project root. Claude Code sets this automatically when launching, so the Python scripts in `.claude/scripts/` resolve project-relative paths correctly. **You should not need to set it yourself.**
 
 If hooks are silently doing nothing (see Troubleshooting), the most common cause is that `CLAUDE_PROJECT_DIR` is unset because Claude Code was launched from outside the project root, or because a wrapper / IDE plugin stripped it. Verify with `python -c "import os; print(os.environ.get('CLAUDE_PROJECT_DIR'))"` from inside Claude Code's Bash tool.
 
@@ -16,9 +16,10 @@ Other prerequisites: `python3` on `PATH`, `git`, and a Claude Code version recen
 
 - **Auto-loaded `CLAUDE.md`** — project rules + work style that every session starts with.
 - **`PROTOCOL.md`** — the single source of truth for session lifecycle (start / during / end).
-- **`/start` + `/end` slash commands** — wired session begin/close with worktree guard, clean-tree guarantee, and auto-push.
-- **PostToolUse hook** — enforces `CODEBASE_INDEX.md` updates automatically. New file created → hook appends to pending queue → `/end` refuses to complete until every entry is indexed.
-- **Session docs skeleton** — `CURRENT_STATE.md`, `HANDOFF_LOG.md`, `CODEBASE_INDEX.md` with the conventions baked in.
+- **`/start` + `/end` slash commands** — wired session begin/close with worktree guard, clean-tree guarantee, auto-push, and a mandatory start-of-session **CROSS-CHECK** (NEXT ACTION vs the status spine vs the last handoff → flag contradictions instead of trusting one file).
+- **Anti-drift status model** — a single "status at a glance" **spine** table in `ROADMAP.md` is the sole source of truth for where the project stands; `CURRENT_STATE.md` only points at it. Phase/block numbers are **frozen** (a cut item stays a labeled gap, never renumbered). This kills the "which phase are we on?" drift that happens when two docs both keep a status list. The `SessionStart` hook injects the spine and the cross-check directive automatically.
+- **Bidirectional `CODEBASE_INDEX.md` discipline** — the `PostToolUse` hook covers the forward direction (new file on disk → appended to a pending queue → `/end` refuses to complete until it's indexed); `validate-index.py` (run at `/end` Step 1c) covers the reverse (index rows pointing at files that no longer exist → flagged for removal).
+- **Session docs skeleton** — `CURRENT_STATE.md` (NEXT-ACTION-first shape), `HANDOFF_LOG.md`, `CODEBASE_INDEX.md` with the conventions baked in.
 - **`.mcp.json.template`** — opt-in Cloudflare MCP server bundle (Workers Bindings, observability, browser rendering). Rename to `.mcp.json` and follow the inline comments to enable.
 
 ## How to apply to a new project
@@ -57,15 +58,17 @@ Other prerequisites: `python3` on `PATH`, `git`, and a Claude Code version recen
 
 4. **Customize `.claude/commands/start.md` + `end.md`** — these now use generic phrasing ("`cd` into your project root and run `claude`") so no path substitution is required. Edit only if you want to add project-specific guidance.
 
-5. **Prime the docs** — `docs/CURRENT_STATE.md` has placeholders for Day 1. `docs/HANDOFF_LOG.md` is just a header. `docs/CODEBASE_INDEX.md` starts empty but grows with every `/end` as the PostToolUse hook captures new files.
+5. **Prime the docs** — `docs/CURRENT_STATE.md` has placeholders for Day 1; fill in the single **📍 NEXT ACTION** line (session-start reports it verbatim). `docs/HANDOFF_LOG.md` is just a header. `docs/CODEBASE_INDEX.md` starts empty but grows with every `/end` as the PostToolUse hook captures new files.
 
-6. **Verify the hook works** — open Claude Code in the new project, then ask it to `Write` a throwaway file at `tmp-hook-check.md`. Then read `.claude/pending-index-updates.txt`:
+6. **Create the status spine (when the roadmap lands)** — the anti-drift model depends on one authoritative status list. When you write `ROADMAP.md`, give it a **"📊 status at a glance" spine table** (one row per phase/block + its status, with a CURRENT marker). `CURRENT_STATE.md` and the `/start` cross-check read from it; do **not** duplicate the phase list anywhere else. Until the spine exists, the hook and cross-check simply skip it — nothing breaks, you just don't get drift protection yet.
+
+7. **Verify the hook works** — open Claude Code in the new project, then ask it to `Write` a throwaway file at `tmp-hook-check.md`. Then read `.claude/pending-index-updates.txt`:
    - **Contains `tmp-hook-check.md`** → hook is live. Delete the throwaway file and clear the pending entry.
    - **Empty or missing** → hook didn't fire. See "Troubleshooting" below before continuing.
 
    (An empty pending file in normal operation means "no undocumented files queued." Right after writing a brand-new file, it should be non-empty.)
 
-7. **Optional but recommended:** Add a `DECISIONS.md` at the repo root for architectural decision records. The `/end` protocol references it as the home for "pre-authorized push" consent and major tech choices.
+8. **Optional but recommended:** Add a `DECISIONS.md` at the repo root for architectural decision records. The `/end` protocol references it as the home for "pre-authorized push" consent and major tech choices.
 
 ## Troubleshooting
 
@@ -100,7 +103,8 @@ You're on Claude Code Desktop, which force-creates worktrees. See the linked Git
 |---|---|---|
 | Code quality rules (500/800 line caps, no `utils/`, Zod at boundaries, DRY 3+) | Yes | These are the template author's standing preferences; drop/edit to taste |
 | Session lifecycle (overwrite `CURRENT_STATE`, append `HANDOFF_LOG`, auto-push) | Mostly | The protocol shape is generic; the auto-push consent requires your sign-off per project |
-| PostToolUse hook for index tracking | Yes | Addresses a real discipline-failure mode; strongly recommended |
+| PostToolUse hook + `validate-index.py` for bidirectional index tracking | Yes | Addresses a real discipline-failure mode; strongly recommended |
+| Status spine as single source of truth + `/start` cross-check + frozen numbers | No | Generic anti-drift mechanism — helps any project that keeps a running status doc. Costs nothing until you create the spine |
 | Worktree guard on `/start` + `/end` | Yes | Claude Code Desktop force-creates worktrees; this flagbreaks the user out of them. Only relevant if you hit the same problem |
 | Mock-before-build workflow | No | Only applies to UI-heavy projects. Drop the section in `CLAUDE.md` for backend/CLI projects |
 
