@@ -80,6 +80,31 @@ def main() -> None:
         except OSError:
             pass
 
+    # Inject the ROADMAP "status at a glance" spine — the source of truth for
+    # phase/block status. CURRENT_STATE's NEXT ACTION is cross-checked against
+    # this (and the handoff line below) before the start report. If the project
+    # has no ROADMAP.md or no spine yet, this block is silently skipped.
+    roadmap_path = pathlib.Path(project_dir) / "ROADMAP.md"
+    if roadmap_path.exists():
+        try:
+            rlines = roadmap_path.read_text(encoding="utf-8").splitlines()
+            spine: list[str] = []
+            capturing = False
+            for ln in rlines:
+                if "status at a glance" in ln.lower():
+                    capturing = True
+                elif capturing and ln.startswith("## "):
+                    break
+                if capturing:
+                    spine.append(ln)
+            if spine:
+                parts.append(
+                    "\n### ROADMAP.md — status-at-a-glance spine (SOURCE OF TRUTH for phase/block status)\n"
+                )
+                parts.append("\n".join(spine).rstrip() + "\n")
+        except OSError:
+            pass
+
     handoff_path = pathlib.Path(project_dir) / "docs" / "HANDOFF_LOG.md"
     if handoff_path.exists():
         try:
@@ -94,11 +119,21 @@ def main() -> None:
 
     parts.append(
         "\n---\n"
-        "**Action requested:** Give the user a 3-line status report "
-        "(current phase / what was accomplished last session / what's next or blocking). "
-        "Do not re-read CURRENT_STATE.md or HANDOFF_LOG.md — they are above. "
-        "Do not run `/start`; this hook already covered Steps 1–2 of the start protocol. "
-        "If the user asks for full git status, run it then."
+        "**Action requested — session start.** The blocks above auto-loaded "
+        "CURRENT_STATE.md, the ROADMAP status spine (if present), and the last HANDOFF lines "
+        "(Steps 1–3 of /start). Now:\n"
+        "1. **CROSS-CHECK (mandatory).** Does CURRENT_STATE's NEXT ACTION agree with the "
+        "ROADMAP spine's CURRENT phase/block AND the last HANDOFF line's 'Next:'? "
+        "**If they contradict, STOP and surface the contradiction to the user — do NOT "
+        "pick one and proceed.** A stale CURRENT_STATE that leads with a minor loose end while "
+        "the spine/handoff point at the real next work is exactly the failure this check catches.\n"
+        "2. If they agree, give a 3-line status: where we are (phase/block **name + number** from "
+        "the spine) / what last session accomplished / the single **NEXT ACTION**.\n"
+        "Trust but verify — CURRENT_STATE is hand-written and CAN be stale; the ROADMAP spine "
+        "wins on any status disagreement, and CURRENT_STATE gets fixed. Numbers are frozen "
+        "(never renumber; a cut item stays a labeled gap). Don't re-read the docs above; don't "
+        "run `/start` (this hook covered it). Run git status/log only if the user asks or the "
+        "cross-check needs it."
     )
 
     emit("".join(parts))

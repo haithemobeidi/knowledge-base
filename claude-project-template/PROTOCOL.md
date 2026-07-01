@@ -27,6 +27,16 @@ This protocol fixes all three with **automation, single source of truth, and min
 
 ---
 
+## Where-are-we: one source of truth, frozen numbers
+
+The single source of truth for **project status** is a **"status at a glance" spine table** — one row per phase/block with its status, living in `ROADMAP.md` (create it there the first time the roadmap lands). `docs/CURRENT_STATE.md` carries only the **NEXT ACTION** line + this-session deltas; it does **not** keep its own copy of the phase/block list.
+
+**Why:** a duplicate status list is the single most reliable way to drift a project. The moment two docs both claim to answer "where are we?", one goes stale — usually the hand-written snapshot — and a session opens by reporting the wrong thing. Keep exactly one authoritative list; everything else points at it.
+
+**Phase/block numbers are FROZEN.** Identity is the **name**; the number is a permanent label that never renumbers. A cut or deferred item stays as a **labeled gap** (e.g. "Block 5 — CUT", never reused, never resequenced). Renumbering on a cut splits the repo's brain — half the docs say "Block 6", half say "Block 5" — so don't do it.
+
+---
+
 ## Session Start Protocol
 
 **Mostly automatic.** A `SessionStart` hook (`.claude/scripts/session-start-context.py`) runs the worktree guard and injects `CURRENT_STATE.md` + the last 5 lines of `HANDOFF_LOG.md` at the top of the first turn. So Claude can give the 3-line status report without the user typing `/start`.
@@ -37,13 +47,14 @@ The user can still type `/start` explicitly to force the full protocol (e.g. aft
 2. If `CURRENT_STATE.md` and the last 5 handoff lines are NOT already in context (the SessionStart hook would have injected them), read them now.
 3. Run `git update-index --really-refresh` (clears phantom-dirty stat entries), then `git status` and `git log --oneline -5`. If `git status` still shows changes after the refresh, those are real and must be surfaced to the user — they indicate the previous `/end` did not achieve a clean tree, which is a protocol violation worth flagging.
 4. **Security audit on session start.** Run the package-manager's audit command for the project's primary lockfile (`pnpm audit --prod`, `npm audit`, `cargo audit`, etc.). Report only if non-zero findings — silent on green. Catches supply-chain regressions before they ride into the next session's work.
-5. Read `ROADMAP.md` only if you need context on the current phase.
-6. Report a 3-line status to the user:
-   - Current phase / sub-phase
+5. Read the **"status at a glance" spine in `ROADMAP.md`** — the source of truth for where the project stands.
+6. **CROSS-CHECK before reporting (mandatory — this is the step that prevents drift).** Confirm `CURRENT_STATE.md`'s NEXT ACTION agrees with (a) the spine's CURRENT phase/block, (b) the last HANDOFF line's "Next:", and (c) what recent commits suggest. **If any contradict each other, STOP and surface the contradiction to the user — do not silently pick one and proceed.** A stale `CURRENT_STATE` that says "next: X" while the spine/handoff say "Y" is exactly the failure this check exists to catch.
+7. Report a 3-line status to the user:
+   - Where we are (phase/block **name + number** from the spine)
    - What was accomplished last session
-   - What's blocking, or what's next
+   - The single **NEXT ACTION** — or, if the cross-check failed, the flagged contradiction
 
-**Do not** read every handoff or every doc. `CURRENT_STATE.md` is the source of truth. If it's wrong, fix it — don't work around it.
+**Trust, but verify.** `CURRENT_STATE.md` is the working snapshot, but it is hand-written and CAN be wrong. The ROADMAP spine wins on any status disagreement, and `CURRENT_STATE.md` gets fixed — never silently work around either. Numbers are frozen (never renumber). **Do not** read every handoff or every doc.
 
 ---
 
@@ -98,15 +109,29 @@ Read `.claude/pending-index-updates.txt`.
 
 Run `git diff --name-only HEAD` + `git ls-files --others --exclude-standard`. For every returned path (ignoring protocol bookkeeping, build output, and lockfiles), verify the path appears in `docs/CODEBASE_INDEX.md`. If any are missing, report to the user that the hook may have silently failed, then add them manually.
 
-### Step 2 — Overwrite `docs/CURRENT_STATE.md`
+### Step 1c — Phantom-row check (reverse direction)
 
-Replace the file entirely with a fresh snapshot:
+The `PostToolUse` hook + Step 1b cover the forward direction (files on disk missing from the index). This step covers the reverse: index rows pointing at files that no longer exist (phantom rows left by renames, splits, or deletes). Run:
 
-- Current phase + sub-phase
+```bash
+python .claude/scripts/validate-index.py
+```
+
+If it reports phantom rows, remove those rows from `docs/CODEBASE_INDEX.md` before proceeding. The script exits 0 always and never blocks — it just prints what to clean up.
+
+### Step 2 — Reconcile the ROADMAP spine, then overwrite `docs/CURRENT_STATE.md`
+
+**First, reconcile the source of truth.** If this session completed/started a phase or block or changed scope, update the **"status at a glance" spine in `ROADMAP.md`** (and the matching section header) to match reality. **Never renumber** — a cut/deferred item stays a labeled gap. This is the source of truth; `CURRENT_STATE.md` points at it.
+
+**Then** replace `docs/CURRENT_STATE.md` entirely. Required shape:
+
+- **NEXT ACTION** — ONE unambiguous line: the single next thing to do, matching the spine's CURRENT phase/block. The most important line in the file — session-start reports it verbatim.
 - Build status: working / broken / not yet tested
-- Last 3 things accomplished this session
-- Next 3 priorities
-- Any active blockers
+- **Optional loose ends** — clearly marked as NOT the next step, so a minor leftover can't be mistaken for the priority (that mix-up is a classic drift trigger)
+- Last things accomplished this session
+- Any active blockers + things to watch
+
+**Do NOT keep a copy of the phase/block-status list in `CURRENT_STATE.md`** — point to the spine. A duplicate list is what drifts.
 
 This file is always the most recent state. **Overwrite, do not append.**
 
@@ -164,7 +189,7 @@ Configured in `.claude/settings.json`:
 
 | Hook | Trigger | Action |
 |---|---|---|
-| `SessionStart` (matcher: `startup\|resume\|clear`) | When a session starts, resumes, or clears | Runs `python .claude/scripts/session-start-context.py`. Performs the worktree guard, reads `docs/CURRENT_STATE.md` + last 5 lines of `docs/HANDOFF_LOG.md`, injects them as `additionalContext` so Claude can give the 3-line status report without the user typing `/start`. |
+| `SessionStart` (matcher: `startup\|resume\|clear`) | When a session starts, resumes, or clears | Runs `python .claude/scripts/session-start-context.py`. Performs the worktree guard, reads `docs/CURRENT_STATE.md` + the `ROADMAP.md` status spine (if present) + last 5 lines of `docs/HANDOFF_LOG.md`, injects them as `additionalContext`, and appends the mandatory CROSS-CHECK directive (NEXT ACTION vs spine vs handoff — flag contradictions) so Claude gives an accurate 3-line status without the user typing `/start`. |
 | `PostToolUse` (matcher: `Write\|Edit`) | After any `Write` or `Edit` tool call | Runs `python .claude/scripts/track-new-file.py`. Appends the path to `.claude/pending-index-updates.txt` only if the path is not already present in `docs/CODEBASE_INDEX.md` (so editing existing files doesn't re-queue them). |
 | `Stop` (no matcher) | When Claude finishes a turn | Runs `python .claude/scripts/stop-clean-tree-check.py`. Silent during normal work; only blocks the stop if a `Session:` commit was just made within the last 5 minutes AND `git status --porcelain` is still non-empty (i.e. /end Step 4a was skipped). Acts as a fail-safe for the clean-tree guarantee. |
 

@@ -68,15 +68,29 @@ For every remaining path, check whether it appears verbatim in `docs/CODEBASE_IN
 - Then add a one-line entry for each missing path to `docs/CODEBASE_INDEX.md`.
 - Add a note to the next-session "things to watch" section of `CURRENT_STATE.md` flagging that the hook missed N files.
 
-## Step 2 — Overwrite `docs/CURRENT_STATE.md`
+## Step 1c — Phantom-row check (reverse direction)
 
-Replace the file entirely with a fresh snapshot:
+Steps 1 and 1b cover the forward direction (files on disk missing from the index). This step covers the reverse: index rows pointing at files that no longer exist (phantom rows left behind by renames, splits, or deletes). Run:
 
-- Current phase + sub-phase
+```bash
+python .claude/scripts/validate-index.py
+```
+
+If it reports phantom rows, remove those rows from `docs/CODEBASE_INDEX.md` before proceeding. If there are none, continue. The script exits 0 always and never blocks — it only prints what to clean up.
+
+## Step 2 — Reconcile the ROADMAP spine, then overwrite `docs/CURRENT_STATE.md`
+
+**First, reconcile the source of truth.** If this session completed/started a phase or block or changed scope, update the **"status at a glance" spine in `ROADMAP.md`** (and the matching section header) to match reality. **Never renumber** — a cut/deferred item stays a labeled gap. This is the source of truth; `CURRENT_STATE.md` points at it.
+
+**Then** replace `docs/CURRENT_STATE.md` entirely. Required shape:
+
+- **NEXT ACTION** — ONE unambiguous line: the single next thing to do, matching the spine's CURRENT phase/block. Most important line in the file — session-start reports it verbatim.
 - Build status: working / broken / not yet tested
-- Last 3 things accomplished this session
-- Next 3 priorities
-- Any active blockers
+- **Optional loose ends** — clearly marked as NOT the next step (so a minor leftover can't be mistaken for the priority)
+- Last things accomplished this session
+- Any active blockers + things to watch
+
+**Do NOT keep a copy of the phase/block-status list in `CURRENT_STATE.md`** — point to the spine. A duplicate list is what drifts.
 
 This file is always the most recent state. **Overwrite, do not append.**
 
@@ -113,6 +127,19 @@ For each remaining entry, categorize it:
 3. **You don't know which category it is.** → Default to #2. Ask.
 
 **Do not** leave anything unstaged or untracked and call `/end` done.
+
+### Step 4b — Confirm the mainline is published
+
+The next `/start` reads `CURRENT_STATE.md` from the remote mainline, so it MUST point at the commit Step 4 just created. Since the session ran on `main` (the worktree guard guarantees this), Step 4 already pushed — verify the remote is in sync as a sanity check:
+
+```bash
+git fetch origin main
+# both sides should match:
+git rev-parse HEAD
+git rev-parse origin/main
+```
+
+If they differ, the push didn't land — report it and let the user decide. Do not force push.
 
 ## Step 5 — Report
 

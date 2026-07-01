@@ -137,7 +137,7 @@ The rule of thumb: memory is for things that would be hard to figure out by read
 ## What this template does NOT include
 
 - **Tech stack choices** — no frontend framework, no DB, no deployment target. Each project picks its own and records them in its `CLAUDE.md` "Locked technical decisions" table.
-- **A `ROADMAP.md`** — your project's phases are your project's business. `CLAUDE.md` references this file as optional context.
+- **A `ROADMAP.md`** — your project's phases are your project's business. `CLAUDE.md` references this file as optional context. **When you do create it, give it a "📊 status at a glance" spine table** — one row per phase/block with its status. That table is the single source of truth the protocol's `/start` cross-check and the SessionStart hook read from (see `PROTOCOL.md` → "Where-are-we: one source of truth, frozen numbers"). Until the spine exists, the hook simply skips it — nothing breaks.
 - **Per-folder `README.md` conventions** — mentioned in `CLAUDE.md` rule #9 because they're useful once a codebase has multiple features. Write them incrementally as the project grows; don't seed empty ones.
 
 ## Provenance
