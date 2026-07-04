@@ -111,3 +111,13 @@ Append-only log of why this knowledge base is shaped the way it is. Newest entri
 **Why:** The right workflow is "open Claude Code in a new project, point it at the KB, say 'copy the KB over.'" That requires Claude to read a procedure on arrival. Without one, each project's bootstrap drifts based on the prompt the user remembers to type. Putting it in the README means every time Claude lands in the KB it sees exactly what to do — no guessing, no token-waste on lessons that don't apply.
 
 **How to apply:** When bootstrapping a new project, the user only needs to say "copy the KB over" (or any of the listed trigger phrases). Claude reads the README, runs the procedure, asks one stack question, customizes accordingly. Lessons stay parked unless explicitly pulled in.
+
+---
+
+## 2026-07-04 — Canonize the stale-dist / stacked-bug post-mortem
+
+**Decision:** Promote the Playmoir BUG-48 post-mortem into a standalone `monorepo-stale-dist-zod-strip.md` lesson (kind: postmortem-playbook).
+
+**Why:** A cross-device sync bug burned two full sessions because it was two independent bugs stacked in one pipeline, each masking the other. The client half is a trap that will recur in any pnpm/turbo monorepo whose workspace packages export `dist/`: git-clean at the right commit while the runtime imports a week-old artifact, with Zod's default key-stripping turning the mismatch into silent data loss instead of an error. The debugging methods that cracked it (stage-by-stage verification, protocol-level stream capture with a self-minted client token, healthy-machine control comparison, committed self-classifying runbook for a remote agent on the second device) are all reusable beyond this stack.
+
+**How to apply:** Read when a feature works on one machine but not another despite identical git state, when a field exists in the DB but arrives `undefined` in the UI, or before debugging any multi-stage sync pipeline. The structural fix menu (turbo `dependsOn: ["^build"]`, source-condition exports, drift-guard) belongs in every new monorepo's setup.
