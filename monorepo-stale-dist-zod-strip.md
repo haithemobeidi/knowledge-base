@@ -1,7 +1,7 @@
 ---
 stack: [pnpm-monorepo, zod, vite, tauri, powersync]
 kind: postmortem-playbook
-last_verified: 2026-07-04
+last_verified: 2026-07-20
 ---
 
 # Stale workspace `dist/` + Zod strip = data that vanishes with zero errors — and the stacked-bug post-mortem that found it
@@ -65,6 +65,18 @@ the same stale artifact forever (and may ALSO cache a pre-bundle of it in
 - Or point the package's `exports` at source for internal dev consumption
   (custom condition / `publishConfig`), so there is no stale artifact to serve.
 - A CI/boot drift-guard that compares schema layers catches this class wholesale.
+
+**Resolution actually shipped (2026-07-18, ~2 weeks later):** the simplest version
+of the first bullet, applied without pulling in turbo's `dependsOn` graph —
+two one-line script changes closed both remaining gaps. Root package.json grew
+a `"prepare": "git config core.hooksPath .githooks && pnpm --filter @playmoir/core build"`
+(runs on every `pnpm install`, on every machine, with no manual step — this
+also happened to be the fix for the separate "committed pre-push drift-guard
+hook was never locally activated" gap, see `n-copies-of-truth-drift-guard.md`),
+and the frontend's `"dev"` script became
+`"pnpm --filter @playmoir/core build && vite"` so `pnpm dev` itself cannot boot
+against a stale `dist/`. Both changes are pure build hygiene — no
+machine-specific paths, nothing to configure per developer.
 
 ## Lesson 2 — a Zod parse boundary is also a data FILTER
 
