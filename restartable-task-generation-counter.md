@@ -1,7 +1,7 @@
 ---
 stack: [rust, tauri, tokio, threads]
 kind: pattern
-last_verified: 2026-05-19
+last_verified: 2026-07-20
 ---
 
 # Generation Counter for Restartable Tasks
@@ -161,6 +161,37 @@ On restart: bump the generation, kill the old `Child`, spawn a new one. The old 
 - **One-shot tasks.** If the task runs once and exits, no generation counter needed.
 - **Tasks you'd never restart.** If the only lifecycle is start-once-at-app-launch and stop-at-app-exit, an `AtomicBool` plus a `JoinHandle.abort()` is simpler.
 - **Tasks where stale output is harmless.** Rare, but: if the task only emits idempotent events to a UI that doesn't care about duplicates, you can skip the ceremony.
+
+## Related pattern: debounce a flickering liveness signal (different problem, same file)
+
+The generation counter above solves *stale-instance cleanup on restart* — it does nothing for the opposite failure: a process-liveness poll that misreads a **momentary gap** in an otherwise-live signal as "the process stopped," when what's actually happening is a handoff between two processes (a launcher/bootstrapper exiting a beat before the real long-running process appears).
+
+Concrete case: a game-process watcher polling "is any tracked exe still running" fired its `game_stopped` event (which drove a whole quit-ritual flow) on the very **first** poll where the watched exe was momentarily absent — which happened on *launch*, not quit, for any game whose launcher process exits and hands off to the real game exe a beat later (common with repacks, DRM wrappers, and anti-cheat self-relaunch). One missed poll, read as ground truth, fired a user-facing flow at exactly the wrong moment.
+
+**Fix: an N-consecutive-miss counter, reset on any live sighting.**
+
+```rust
+struct Session {
+    missed_polls: u32,
+    // ...
+}
+
+const STOP_GRACE_POLLS: u32 = 4; // ~12s at a 3s poll interval
+
+// each poll tick:
+if exe_is_running {
+    session.missed_polls = 0;
+} else {
+    session.missed_polls += 1;
+    if session.missed_polls >= STOP_GRACE_POLLS {
+        fire_game_stopped();
+    }
+}
+```
+
+Tune the grace window to comfortably exceed the real handoff gap you're protecting against (here, ~12s covered every observed launcher-to-game handoff), not to an arbitrary round number — too short and the false positive survives, too long and a genuine quick-exit takes longer to register.
+
+**Generalizes beyond games:** any OS-process-lifecycle watcher that treats "process absent on this poll" as ground truth needs this — dev-server auto-restart detectors, wrapper/launcher-process patterns, health-check pollers watching a process that legitimately restarts itself. The tell that you need it: your "stopped" event fires occasionally on **launch**, not just on genuine stop.
 
 ## Origin
 

@@ -1,7 +1,7 @@
 ---
 stack: [powersync, supabase-postgres, cloudflare-r2, fly-io, steam-openid, jwt, tauri]
 kind: architecture
-last_verified: 2026-06-26
+last_verified: 2026-07-20
 ---
 
 # Backend, Auth & Sync — the managed-services rearchitecture (PowerSync + Steam + Postgres + R2)
@@ -116,6 +116,8 @@ Payoff: the server can be **cloned across many machines** with none of them shar
 
 When the app sends a write, it includes a `user_id`. The server **discards it** and substitutes the SteamID from the verified token, and every write is scoped `WHERE user_id = <you>`. So a malicious client *cannot* write under someone else's account or modify a row it doesn't own — enforced in the SQL itself, not on the honor system.
 - `apps/server/src/db.js` → `applyOp()` + the `WRITABLE` column allowlist (also the SQL-injection guard: only allowlisted tables/columns ever reach the query string, since table + column names are interpolated, not parameterized).
+
+**Non-obvious gotcha with the `WRITABLE` allowlist: a PowerSync CRUD op carries the row's full replicated-column set, not just the columns your local statement touched.** Client-side, `UPDATE games SET playtime_minutes = ? WHERE id = ?` looks column-scoped — but PowerSync's CRUD queue serializes the op from its *watched table schema*, so the batch that reaches `applyOp()` can include every replicated column on that row, not only `playtime_minutes`. If a server-authoritative column (one only the server itself is ever supposed to set) isn't in `WRITABLE`, the whole op — including the one column you actually meant to write — gets rejected, not just silently dropped. Symptom: adding a new synced column and forgetting to add it to `WRITABLE` doesn't just mean "that column never updates," it can mean *every* unrelated create/edit on that table starts failing the moment a client happens to have that column staged in its CRUD op. Add a new replicated column to `WRITABLE` in the same commit that adds it anywhere else — see `n-copies-of-truth-drift-guard.md`.
 
 ---
 
