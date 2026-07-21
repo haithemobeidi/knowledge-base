@@ -1,7 +1,7 @@
 ---
 stack: [tauri, react, webview2]
 kind: gotcha
-last_verified: 2026-05-15
+last_verified: 2026-07-21
 ---
 
 # WebView2 + React render traps — gotchas that don't exist in Chrome dev
@@ -118,6 +118,22 @@ The default height is 28-32px depending on the Tauri version and Windows version
 **Where you can skip it:** the drag region is only at the top of the window. Side-pinned UI, modals, or anything `position: fixed; bottom: 0;` is unaffected.
 
 **Don't try to "disable" the drag region** unless your app has its own custom title bar with explicit drag handles. Removing the drag region without replacing it makes the window un-draggable.
+
+### The follow-up bite: persistent chrome isn't a "screen", and partial overlap hides for months
+
+Added 2026-07-21 after this exact trap resurfaced in a shipped app, ~4 months after the `pt-[44px]` fix above was applied everywhere it was supposed to go.
+
+**Two things make the second occurrence much harder to spot than the first.**
+
+**1 · The advice says "every top-level screen," and persistent chrome is not a screen.** Sidebars, nav rails, floating toolbars, and brand marks are mounted *beside* the router, so a sweep that fixes routes misses them completely. In our case the sidebar had `pt-5` (20px) while every route had `pt-[44px]` — the one component nobody thought of as a screen was the one still straddling the boundary. **Audit by "what renders in the top 32px," not by "what is a page."**
+
+**2 · Partial overlap presents as flakiness, not breakage.** An element taller than the remaining gap gets *bisected* by the drag region: our 25px-tall logo sat at y=20–45, so its top 12px were dead and its bottom 13px worked fine. It still lit up on hover (the hover fired from the live half), so it looked completely functional. The user's own words on discovering it: *"with the logo only the bottom half really works lol."* A fully-dead button gets reported on day one; a half-dead one survives indefinitely because every accidental success reinforces "it works."
+
+**Do the arithmetic instead of clicking around.** `container padding-top` + `element offset` vs. the drag strip's height is a two-file check, and it's decisive. Clicking is unreliable precisely because you'll often hit the live half.
+
+**Two fixes, and prefer the boring one.** You can raise the element above the drag layer (`z-index` above the strip's), or push it below the boundary with padding. Padding wins in almost every case: it reuses the clearance convention the codebase already has, it's self-explanatory to the next reader, and it leaves the drag strip intact — the `z-index` route silently punches a non-draggable hole in your title bar, and needs a comment explaining why a logo has a mysterious stacking context.
+
+**Related affordance note, worth thirty seconds:** the same element had `cursor: default` set explicitly *and* a hover animation (scale + glow) — and users read it as a button anyway. **A hover transform outranks the cursor as an interactivity signal.** If an element animates on hover, people will click it regardless of what the cursor says; either give it a real action or remove the hover state. Do not rely on `cursor` to communicate "not clickable."
 
 ---
 
