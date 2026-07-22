@@ -1,7 +1,7 @@
 ---
 stack: [tauri, better-auth, cloudflare-worker]
 kind: howto
-last_verified: 2026-05-14
+last_verified: 2026-07-22
 ---
 
 # Desktop OAuth for Tauri 2 Apps (Windows/macOS/Linux)
@@ -204,6 +204,10 @@ app.post('/api/auth/exchange-code', async (c) => {
    // Inside onUrl callback, clearTimeout(timeoutId) before the exchange call.
    // Inside the Cancel button handler, do the same teardown + clearTimeout.
    ```
+
+7. **The listener dies on component UNMOUNT — so never host this flow in a transient/dismissable UI surface.** Gotcha #6 is about the browser tab closing; this is about the *host component* closing. The correct cleanup for this pattern is teardown on unmount (`useEffect(() => () => tearDown(), [])` — cancel the port + `unlisten()`), because you must not leak the localhost server. But that same correct cleanup means: **whatever component calls `start()`/`onUrl()` must stay mounted for the entire round-trip** (open browser → user authenticates → loopback redirect fires `onUrl`). If you host the flow inside a popover, dropdown, or any panel that unmounts on click-outside / focus-steal / navigation, then the instant that surface closes — which happens the moment the system browser steals focus, or the user clicks away — the component unmounts, `tearDown()` runs, the loopback listener is gone, and the callback **silently never lands**. It works in every quick test (you don't click away) and fails constantly in the wild.
+
+   **Fix**: host the sign-in flow on a surface that stays mounted — a Settings page, a dedicated dialog that doesn't dismiss on outside-click, or an app-level sign-in host exposed via a store/context. From a transient surface (e.g. a notification popover offering "Sign in to resume backup"), **route the user to the persistent surface** rather than running the flow inline. Generalizes beyond OAuth: any teardown-on-unmount subscription whose success depends on an out-of-band event landing later (loopback servers, WebSocket handlers, `postMessage` listeners, deep-link handlers) must not live in a surface that unmounts as part of normal interaction. (Playmoir, 2026-07-21: the notification hub's expired-session "Sign in" routes to Settings/Connections for exactly this reason — the hub panel is a Radix Popover that unmounts on close.)
 
 ## Reference Implementation Layout
 
