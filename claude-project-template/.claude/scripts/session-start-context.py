@@ -80,6 +80,19 @@ def main() -> None:
         except OSError:
             pass
 
+    # Open-item ledger — the append-and-strike record of session-scoped open
+    # items (queued tests, gates, riders). Injected whole: it is small by
+    # design (open items + <7-day-old struck lines, pruned at /end), and its
+    # header carries the during-session rules the agent must follow. Silently
+    # skipped if the project has no ledger file.
+    ledger_path = pathlib.Path(project_dir) / "docs" / "SESSION_LEDGER.md"
+    if ledger_path.exists():
+        try:
+            parts.append("\n### docs/SESSION_LEDGER.md — open-item ledger\n")
+            parts.append(ledger_path.read_text(encoding="utf-8").rstrip() + "\n")
+        except OSError:
+            pass
+
     # Inject the ROADMAP "status at a glance" spine — the source of truth for
     # phase/block status. CURRENT_STATE's NEXT ACTION is cross-checked against
     # this (and the handoff line below) before the start report. If the project
@@ -120,15 +133,19 @@ def main() -> None:
     parts.append(
         "\n---\n"
         "**Action requested — session start.** The blocks above auto-loaded "
-        "CURRENT_STATE.md, the ROADMAP status spine (if present), and the last HANDOFF lines "
-        "(Steps 1–3 of /start). Now:\n"
+        "CURRENT_STATE.md, the SESSION_LEDGER (if present), the ROADMAP status spine (if "
+        "present), and the last HANDOFF lines (Steps 1–4 of /start). Now:\n"
         "1. **CROSS-CHECK (mandatory).** Does CURRENT_STATE's NEXT ACTION agree with the "
-        "ROADMAP spine's CURRENT phase/block AND the last HANDOFF line's 'Next:'? "
+        "ROADMAP spine's CURRENT phase/block AND the last HANDOFF line's 'Next:', AND does "
+        "no open `[ ]` ledger gate contradict it? "
         "**If they contradict, STOP and surface the contradiction to the user — do NOT "
         "pick one and proceed.** A stale CURRENT_STATE that leads with a minor loose end while "
         "the spine/handoff point at the real next work is exactly the failure this check catches.\n"
-        "2. If they agree, give a 3-line status: where we are (phase/block **name + number** from "
-        "the spine) / what last session accomplished / the single **NEXT ACTION**.\n"
+        "2. If they agree, give a 4-line status: where we are (phase/block **name + number** from "
+        "the spine) / what last session accomplished / the single **NEXT ACTION** / open ledger "
+        "items (count + gates).\n"
+        "During the session, follow the ledger's moment-of-event rule (its header): queue and "
+        "strike items THE MOMENT they arise or resolve — never wait for /end.\n"
         "Trust but verify — CURRENT_STATE is hand-written and CAN be stale; the ROADMAP spine "
         "wins on any status disagreement, and CURRENT_STATE gets fixed. Numbers are frozen "
         "(never renumber; a cut item stays a labeled gap). Don't re-read the docs above; don't "

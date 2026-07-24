@@ -21,6 +21,7 @@ This protocol fixes all three with **automation, single source of truth, and min
 | `docs/CODEBASE_INDEX.md` | What every meaningful file in the project does | Whenever a new file is created (enforced by hook) |
 | `docs/CURRENT_STATE.md` | Latest project state — overwritten each session | At session end |
 | `docs/HANDOFF_LOG.md` | Append-only one-line session history | At session end |
+| `docs/SESSION_LEDGER.md` | Append-and-strike ledger of open session-scoped items (queued tests, gates, riders, watch items) | **At the moment** an item is queued or resolved (the scoped exception to docs-at-end-only); reconciled + pruned at `/end` |
 | `.claude/pending-index-updates.txt` | Transient list of files needing index entries | Auto-managed by `PostToolUse` hook |
 
 **Why no per-session handoff snapshot files?** Past projects accumulated 30+ of them and nobody read past the most recent one. Replaced with one rolling state doc + an append-only one-line log. Same information value, no noise, no drift.
@@ -44,15 +45,16 @@ The single source of truth for **project status** is a **"status at a glance" sp
 The user can still type `/start` explicitly to force the full protocol (e.g. after the hook fails). When they do — or when they say "start session" — execute these steps in order:
 
 1. **Worktree guard first** — if cwd contains `.claude/worktrees/` OR the branch starts with `claude/`, STOP and tell the user. Do not proceed with any other steps. (See `.claude/commands/start.md` for the exact verbatim message.) The SessionStart hook also catches this, but typing `/start` re-runs the check.
-2. If `CURRENT_STATE.md` and the last 5 handoff lines are NOT already in context (the SessionStart hook would have injected them), read them now.
+2. If `CURRENT_STATE.md`, `SESSION_LEDGER.md`, and the last 5 handoff lines are NOT already in context (the SessionStart hook would have injected them), read them now.
 3. Run `git update-index --really-refresh` (clears phantom-dirty stat entries), then `git status` and `git log --oneline -5`. If `git status` still shows changes after the refresh, those are real and must be surfaced to the user — they indicate the previous `/end` did not achieve a clean tree, which is a protocol violation worth flagging.
 4. **Security audit on session start.** Run the package-manager's audit command for the project's primary lockfile (`pnpm audit --prod`, `npm audit`, `cargo audit`, etc.). Report only if non-zero findings — silent on green. Catches supply-chain regressions before they ride into the next session's work.
 5. Read the **"status at a glance" spine in `ROADMAP.md`** — the source of truth for where the project stands.
-6. **CROSS-CHECK before reporting (mandatory — this is the step that prevents drift).** Confirm `CURRENT_STATE.md`'s NEXT ACTION agrees with (a) the spine's CURRENT phase/block, (b) the last HANDOFF line's "Next:", and (c) what recent commits suggest. **If any contradict each other, STOP and surface the contradiction to the user — do not silently pick one and proceed.** A stale `CURRENT_STATE` that says "next: X" while the spine/handoff say "Y" is exactly the failure this check exists to catch.
-7. Report a 3-line status to the user:
+6. **CROSS-CHECK before reporting (mandatory — this is the step that prevents drift).** Confirm `CURRENT_STATE.md`'s NEXT ACTION agrees with (a) the spine's CURRENT phase/block, (b) the last HANDOFF line's "Next:", (c) what recent commits suggest, and (d) no open `[ ]` ledger gate contradicts it. **If any contradict each other, STOP and surface the contradiction to the user — do not silently pick one and proceed.** A stale `CURRENT_STATE` that says "next: X" while the spine/handoff say "Y" is exactly the failure this check exists to catch.
+7. Report a 4-line status to the user:
    - Where we are (phase/block **name + number** from the spine)
    - What was accomplished last session
    - The single **NEXT ACTION** — or, if the cross-check failed, the flagged contradiction
+   - Open ledger items: N (call out any that gate the next action)
 
 **Trust, but verify.** `CURRENT_STATE.md` is the working snapshot, but it is hand-written and CAN be wrong. The ROADMAP spine wins on any status disagreement, and `CURRENT_STATE.md` gets fixed — never silently work around either. Numbers are frozen (never renumber). **Do not** read every handoff or every doc.
 
@@ -78,10 +80,17 @@ The user can still type `/start` explicitly to force the full protocol (e.g. aft
 - The `/end` command **cannot complete** while that file is non-empty.
 - This replaces the discipline-based approach that failed in past projects.
 
-### Docs updates: at `/end` only, never mid-session
-- `docs/CODEBASE_INDEX.md`, `docs/CURRENT_STATE.md`, and `docs/HANDOFF_LOG.md` get refreshed at `/end`. Do NOT edit them mid-session.
+### Docs updates: narrative at `/end` only — the LEDGER at the moment
+- `docs/CODEBASE_INDEX.md`, `docs/CURRENT_STATE.md`, and `docs/HANDOFF_LOG.md` (the **narrative** docs) get refreshed at `/end`. Do NOT edit them mid-session.
 - **Why:** pause-point feedback during a session can reframe the work (a bug surfaces, scope shifts, a feature gets split into two phases). Doc edits made mid-session get rewritten by the time `/end` lands, and the intermediate version pollutes git history.
 - The hook still queues new-file pending entries mid-session — that's the bookkeeping mechanism, not user-facing docs.
+- **`docs/SESSION_LEDGER.md` is the scoped exception** — see the next section. Fact lines (item queued / item resolved) move at the moment of the event; only narrative waits for `/end`.
+
+### Open-item ledger discipline (the moment-of-event rule)
+- The moment work is queued or deferred in conversation — "next session," "before release," "rider candidate," "queued," "check later" — append a `[ ]` line to `docs/SESSION_LEDGER.md` **right then**, not at `/end`.
+- The moment a ledger item is resolved, strike it **right then**: `[x]` + `→ DONE <date>: <one-line evidence>`, or `[-]` + reason. Never strike an item you merely don't recognize (concurrent sessions may share the checkout).
+- **Why at-the-moment, not at /end:** long sessions get context-compacted by the harness, so end-of-session recall provably drops early-session facts. Measured on the source project (2026-07-24 audit): a passed smoke test vanished from that session's wrap and was nearly re-run a day later; a dozen shipped features sat listed as open; the same work was recorded twice by consecutive wraps. Capture at the moment happens while the fact is fully in context — the same design as the index hook, which is the one part of this protocol that has never drifted.
+- The ledger is NOT for bugs, feature ideas, or phase/block status — those keep their own homes. One concept, one home. IDs (L-1, L-2, …) increment forever and are never reused.
 
 ### Check stale messages before re-changing
 - After a fix lands, ask the user whether the issue is still happening before changing the code again.
@@ -119,15 +128,19 @@ python .claude/scripts/validate-index.py
 
 If it reports phantom rows, remove those rows from `docs/CODEBASE_INDEX.md` before proceeding. The script exits 0 always and never blocks — it just prints what to clean up.
 
+### Step 1d — Reconcile `docs/SESSION_LEDGER.md`
+
+Read the ledger **from disk**, then: disposition every `[ ]` item this session touched (`[x]` + one-line evidence / `[-]` + reason); append `[ ]` lines for anything this session queued that isn't captured; prune struck lines older than 7 days. Do this BEFORE writing CURRENT_STATE so the wrap is written against the ledger, not end-of-session recall. (Full detail: `.claude/commands/end.md` Step 1d.)
+
 ### Step 2 — Reconcile the ROADMAP spine, then overwrite `docs/CURRENT_STATE.md`
 
 **First, reconcile the source of truth.** If this session completed/started a phase or block or changed scope, update the **"status at a glance" spine in `ROADMAP.md`** (and the matching section header) to match reality. **Never renumber** — a cut/deferred item stays a labeled gap. This is the source of truth; `CURRENT_STATE.md` points at it.
 
-**Then** replace `docs/CURRENT_STATE.md` entirely. Required shape:
+**Then re-read `docs/CURRENT_STATE.md` from disk** (concurrent sessions can share a checkout — if another session wrapped mid-flight, fold its facts in rather than clobbering from a stale snapshot), and replace it entirely. Required shape:
 
 - **NEXT ACTION** — ONE unambiguous line: the single next thing to do, matching the spine's CURRENT phase/block. The most important line in the file — session-start reports it verbatim.
 - Build status: working / broken / not yet tested
-- **Optional loose ends** — clearly marked as NOT the next step, so a minor leftover can't be mistaken for the priority (that mix-up is a classic drift trigger)
+- **Optional loose ends** — POINT at open `SESSION_LEDGER.md` IDs; no separate prose list (regenerated prose silently drops items). Clearly marked as NOT the next step, so a minor leftover can't be mistaken for the priority (that mix-up is a classic drift trigger)
 - Last things accomplished this session
 - Any active blockers + things to watch
 
@@ -144,9 +157,11 @@ Append a single line at the bottom:
 YYYY-MM-DD HH:MM | Phase X.Y | <one-line summary> | <build status>
 ```
 
+**Summary field hard cap ~300 chars** — fact-grade detail lives in the ledger and CURRENT_STATE. Mini-wrap lines (see "Between Sessions") cover ONLY the delta since the previous wrap.
+
 ### Step 4 — Git commit and push
 
-Stage docs bookkeeping + commit with message: `Session: <one-line summary>`. Then push.
+Stage docs bookkeeping (incl. `docs/SESSION_LEDGER.md`) + commit with message: `Session: <one-line summary>`. Then push.
 
 **Standing authorization for session-end pushes:** The user pre-authorizes `git push` as part of `/end` so they can continue work from another machine without manual ceremony. Project-specific; document in `DECISIONS.md` before relying on it. Covers normal pushes only — **force pushes still require explicit per-instance user confirmation.** If a push fails (rejected, conflicts, network), report it and let the user decide; do not retry destructively.
 
@@ -162,10 +177,11 @@ After the docs commit, run `git status --porcelain`. **Output MUST be empty** be
 
 ### Step 5 — Report
 
-Three lines:
+Four lines:
 1. What was accomplished this session
 2. What's next
 3. Anything to watch for next session
+4. Open ledger items: N (call out any that gate the next action)
 
 ---
 
@@ -179,6 +195,8 @@ Once `/end` completes successfully, the session is over. The user should:
 
 **Do not run `/start` in the same session that just ran `/end`.** That session's context is already stale — re-reading docs Claude just wrote won't help, and you'll be wasting the context window on superseded tool output.
 
+**Post-/end work rule (mini-wrap).** If work DOES continue after a completed `/end` (it regularly does), it must close with a **mini-wrap**: disposition/append ledger lines → ONE delta-only HANDOFF line (never a whole-session re-summary) → CURRENT_STATE only if NEXT ACTION or build status changed → `Session followup:` commit + push, clean tree. Improvised "wrap #2" re-summaries are how the same work gets recorded twice.
+
 **Why this works:** `CURRENT_STATE.md` + `HANDOFF_LOG.md` are designed to be the *entire* memory that crosses session boundaries. A fresh context window + `/start` is strictly better than a full context window carried over, because Claude reads the definitive files instead of relying on drifting in-memory assumptions.
 
 ---
@@ -189,7 +207,7 @@ Configured in `.claude/settings.json`:
 
 | Hook | Trigger | Action |
 |---|---|---|
-| `SessionStart` (matcher: `startup\|resume\|clear`) | When a session starts, resumes, or clears | Runs `python .claude/scripts/session-start-context.py`. Performs the worktree guard, reads `docs/CURRENT_STATE.md` + the `ROADMAP.md` status spine (if present) + last 5 lines of `docs/HANDOFF_LOG.md`, injects them as `additionalContext`, and appends the mandatory CROSS-CHECK directive (NEXT ACTION vs spine vs handoff — flag contradictions) so Claude gives an accurate 3-line status without the user typing `/start`. |
+| `SessionStart` (matcher: `startup\|resume\|clear`) | When a session starts, resumes, or clears | Runs `python .claude/scripts/session-start-context.py`. Performs the worktree guard, reads `docs/CURRENT_STATE.md` + `docs/SESSION_LEDGER.md` + the `ROADMAP.md` status spine (if present) + last 5 lines of `docs/HANDOFF_LOG.md`, injects them as `additionalContext`, and appends the mandatory CROSS-CHECK directive (NEXT ACTION vs spine vs handoff vs open ledger gates — flag contradictions) so Claude gives an accurate 4-line status without the user typing `/start`. |
 | `PostToolUse` (matcher: `Write\|Edit`) | After any `Write` or `Edit` tool call | Runs `python .claude/scripts/track-new-file.py`. Appends the path to `.claude/pending-index-updates.txt` only if the path is not already present in `docs/CODEBASE_INDEX.md` (so editing existing files doesn't re-queue them). |
 | `Stop` (no matcher) | When Claude finishes a turn | Runs `python .claude/scripts/stop-clean-tree-check.py`. Silent during normal work; only blocks the stop if a `Session:` commit was just made within the last 5 minutes AND `git status --porcelain` is still non-empty (i.e. /end Step 4a was skipped). Acts as a fail-safe for the clean-tree guarantee. |
 

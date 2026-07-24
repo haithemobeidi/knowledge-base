@@ -36,15 +36,17 @@ If the cwd contains `.claude/worktrees/` OR the branch starts with `claude/`, **
 Execute these steps in order:
 
 1. Read `docs/CURRENT_STATE.md` for the latest project snapshot.
-2. Read the last 5 lines of `docs/HANDOFF_LOG.md` for recent session summaries.
-3. Run `git update-index --really-refresh > /dev/null 2>&1 || true` to clear phantom-dirty stat entries — files git thinks are modified but are byte-identical to HEAD. Stale mtimes can come from any fresh checkout, and the refresh is a cheap no-op when there's nothing to do. Then run `git status` and `git log --oneline -5`. If `git status` still shows changes after the refresh, those are real and must be surfaced to the user in Step 5 — they indicate the previous `/end` did not achieve a clean tree, which is a protocol violation to flag.
-4. Run the project's security audit command (e.g. `pnpm audit --prod`, `npm audit`, `cargo audit`). Silent on green — only mention if there are non-zero findings.
-5. Read the **"status at a glance" spine in `ROADMAP.md`** — the single source of truth for where the project stands (which phase/block is CURRENT).
-6. **CROSS-CHECK before reporting (mandatory — this is the step that prevents drift).** Confirm `CURRENT_STATE.md`'s NEXT ACTION agrees with (a) the spine's CURRENT phase/block, (b) the last HANDOFF line's "Next:", and (c) recent commits. **If any contradict each other, STOP and surface the contradiction to the user — do not silently pick one and proceed.**
-7. Report a 3-line status to the user:
+2. Read `docs/SESSION_LEDGER.md` — the append-and-strike ledger of open session-scoped items (queued tests, gates, riders). Count the open `[ ]` items and note any that bear on the NEXT ACTION (e.g. an open pre-release gate when the next action is a release).
+3. Read the last 5 lines of `docs/HANDOFF_LOG.md` for recent session summaries.
+4. Run `git update-index --really-refresh > /dev/null 2>&1 || true` to clear phantom-dirty stat entries — files git thinks are modified but are byte-identical to HEAD. Stale mtimes can come from any fresh checkout, and the refresh is a cheap no-op when there's nothing to do. Then run `git status` and `git log --oneline -5`. If `git status` still shows changes after the refresh, those are real and must be surfaced to the user in Step 5 — they indicate the previous `/end` did not achieve a clean tree, which is a protocol violation to flag.
+5. Run the project's security audit command (e.g. `pnpm audit --prod`, `npm audit`, `cargo audit`). Silent on green — only mention if there are non-zero findings.
+6. Read the **"status at a glance" spine in `ROADMAP.md`** — the single source of truth for where the project stands (which phase/block is CURRENT).
+7. **CROSS-CHECK before reporting (mandatory — this is the step that prevents drift).** Confirm `CURRENT_STATE.md`'s NEXT ACTION agrees with (a) the spine's CURRENT phase/block, (b) the last HANDOFF line's "Next:", (c) recent commits, and (d) no open `[ ]` `SESSION_LEDGER.md` gate contradicts it. **If any contradict each other, STOP and surface the contradiction to the user — do not silently pick one and proceed.**
+8. Report a 4-line status to the user:
    - Where we are (phase/block **name + number** from the spine)
    - What was accomplished last session
    - The single **NEXT ACTION** — or, if the cross-check failed, the flagged contradiction
+   - Open ledger items: N (call out any that gate the next action)
 
 **Trust, but verify.** `CURRENT_STATE.md` is the working snapshot but it's hand-written and CAN be wrong. The ROADMAP spine wins on any status disagreement, and `CURRENT_STATE.md` gets fixed — never silently work around either. Numbers are frozen (never renumber; a cut item stays a labeled gap). **Do not** read every handoff or every doc.
 

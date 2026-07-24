@@ -78,15 +78,26 @@ python .claude/scripts/validate-index.py
 
 If it reports phantom rows, remove those rows from `docs/CODEBASE_INDEX.md` before proceeding. If there are none, continue. The script exits 0 always and never blocks — it only prints what to clean up.
 
+## Step 1d — Reconcile `docs/SESSION_LEDGER.md`
+
+The ledger (PROTOCOL.md → "Open-item ledger discipline") is the append-and-strike record of session-scoped open items. Reconcile it NOW, before writing CURRENT_STATE, so the wrap is written against the ledger instead of end-of-session recall — recall provably loses early-session facts to context compaction (measured on the source project, 2026-07-24: a passed smoke test vanished from the wrap and was nearly re-run a day later).
+
+1. Read `docs/SESSION_LEDGER.md` **from disk** (a concurrent session may have edited it).
+2. Disposition every `[ ]` item this session touched: `[x]` + `→ DONE <date>: <one-line evidence>`, or `[-]` + reason. Items this session didn't touch stay `[ ]` untouched. **Never strike an item you merely don't recognize** — it may belong to a concurrent session.
+3. Append `[ ]` lines for anything this session queued or deferred that isn't captured yet — scan the session for "next session," "before release," "rider," "queued," "check later."
+4. Prune `[x]`/`[-]` lines whose disposition date is older than 7 days (their history lives in git).
+
 ## Step 2 — Reconcile the ROADMAP spine, then overwrite `docs/CURRENT_STATE.md`
 
 **First, reconcile the source of truth.** If this session completed/started a phase or block or changed scope, update the **"status at a glance" spine in `ROADMAP.md`** (and the matching section header) to match reality. **Never renumber** — a cut/deferred item stays a labeled gap. This is the source of truth; `CURRENT_STATE.md` points at it.
+
+**Then re-read `docs/CURRENT_STATE.md` from disk before overwriting it.** Concurrent sessions can share a checkout; if the file changed since this session started (`git log --oneline -2 -- docs/CURRENT_STATE.md`, or compare against the session-start copy), another session wrapped mid-flight — fold its facts into your rewrite instead of clobbering them from a stale snapshot.
 
 **Then** replace `docs/CURRENT_STATE.md` entirely. Required shape:
 
 - **NEXT ACTION** — ONE unambiguous line: the single next thing to do, matching the spine's CURRENT phase/block. Most important line in the file — session-start reports it verbatim.
 - Build status: working / broken / not yet tested
-- **Optional loose ends** — clearly marked as NOT the next step (so a minor leftover can't be mistaken for the priority)
+- **Optional loose ends** — POINT at open `SESSION_LEDGER.md` IDs (e.g. "open: L-3, L-8 — see ledger"); do **not** maintain a separate prose list here (regenerated prose silently drops items). Clearly marked as NOT the next step (so a minor leftover can't be mistaken for the priority)
 - Last things accomplished this session
 - Any active blockers + things to watch
 
@@ -103,11 +114,14 @@ Append a single line at the bottom:
 YYYY-MM-DD HH:MM | Phase X.Y | <one-line summary> | <build status>
 ```
 
+**Hard cap ~300 characters for the summary field.** The line is a scannable index entry — fact-grade detail belongs in the ledger and CURRENT_STATE (on the source project, wrap lines ballooned to ~1,500 chars and still lost facts). If this is a post-/end **mini-wrap** (see "After /end" below), the line covers ONLY the delta since the previous wrap line — never re-summarize the whole session (whole-session re-summaries are how the same work gets recorded twice).
+
 ## Step 4 — Git commit and push
 
 Run `git status` to confirm what changed. Stage the docs bookkeeping:
 - `docs/CURRENT_STATE.md`
 - `docs/HANDOFF_LOG.md`
+- `docs/SESSION_LEDGER.md`
 - `docs/CODEBASE_INDEX.md` (if updated)
 
 Commit with message: `Session: <one-line summary>`
@@ -143,9 +157,21 @@ If they differ, the push didn't land — report it and let the user decide. Do n
 
 ## Step 5 — Report
 
-Three lines:
+Four lines:
 1. What was accomplished this session
 2. What's next
 3. Anything to watch for next session
+4. Open ledger items: N (list the IDs; call out any that gate the next action)
+
+## After /end — post-wrap work rule (mini-wrap)
+
+/end is often not the last word; follow-up work regularly happens after the wrap. Any work done after a completed /end MUST close with a **mini-wrap** (~2 minutes, non-negotiable):
+
+1. Disposition/append `docs/SESSION_LEDGER.md` lines for the new work (Step 1d rules).
+2. Append ONE **delta-only** line to `HANDOFF_LOG.md` — only what happened since the last wrap line.
+3. Update `CURRENT_STATE.md` ONLY if the NEXT ACTION or build status changed.
+4. Commit (`Session followup: <summary>`) + push; confirm `git status --porcelain` is empty.
+
+Do not improvise "wrap #2" full re-summaries, and do not skip the mini-wrap because the follow-up felt small — unrecorded and double-recorded post-wrap work are two of the four measured drift modes that motivated the ledger.
 
 See [`PROTOCOL.md`](../../PROTOCOL.md) for the complete protocol context.
