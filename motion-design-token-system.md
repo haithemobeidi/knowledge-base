@@ -1,7 +1,7 @@
 ---
 stack: [react, css, framer-motion, tailwind]
 kind: pattern
-last_verified: 2026-07-08
+last_verified: 2026-07-21
 ---
 
 # A motion design-token system that reduced-motion actually reaches
@@ -117,8 +117,30 @@ html[data-motion-pref='off'] *::after {
 
 This kill-switch doesn't cover the JS-library-driven layer (that's `MotionProvider`'s job above) — it's specifically the backstop for CSS you don't control or haven't migrated to the token system yet.
 
+### The trap inside the kill-switch: near-zero duration *freezes* a loop, it doesn't neutralize it
+
+`animation-duration: 0.001ms !important` reads like "turn the animation off." It doesn't. It leaves the animation *running*, just so fast the element renders at a single fixed point in the keyframe timeline — and for an **infinite/looping** animation, which point that is comes out effectively arbitrary. In practice engines pin it to the `0%` keyframe. That's harmless for a pulse that rests at its neutral value at 0% — but it's a real bug when the state the animation expresses is *carried by* the animated property.
+
+Concrete failure we hit: a "syncing" indicator was a bright band sweeping through the mark — `@keyframes { 0%,100% { opacity: .22 } 45% { opacity: 1 } }`. Under reduced motion the kill-switch froze it at the `0%` frame, i.e. its **dimmest** value (`.22`). Result: the "busy" state rendered *fainter than the idle resting state* — the exact opposite of the signal. Nobody notices in review because you don't test every looping animation with reduce-motion on; it surfaces as "why does active look more off than idle?"
+
+**The fix — give continuously-animated states a *designed* static form.** Where an animation communicates state (not just decoration), add an explicit reduced-motion rule that (a) sets `animation: none` — needed so the frozen keyframe value can't override your static value from the animation cascade origin, which outranks normal declarations — and (b) sets the property to a chosen held value that still reads as that state:
+
+```css
+/* Match the kill-switch's own conditions exactly, so behavior is consistent */
+html[data-motion-pref='off'] .mark[data-state='syncing'] .echo,
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion-pref='full']) .mark[data-state='syncing'] .echo {
+    animation: none;      /* stop the loop so the value below actually applies */
+    opacity: .85;         /* a bright, HELD "busy" — not the frozen .22 */
+  }
+}
+```
+
+Decorative loops (a glow pulse that rests neutral at 0%) can keep riding the blanket kill-switch — they freeze to a fine value. It's only the loops whose *meaning lives in the animated property* that need the explicit held state. Audit rule: for every `infinite` keyframe, ask "what does its 0% frame look like, and is that an acceptable static picture of this state?" If no, it needs a designed reduced-motion hold.
+
 ## What NOT to do
 
 - **Don't assume CSS media-query coverage means you're done.** Test with your JS animation library's most commonly used component with the OS "reduce motion" setting on — if it still animates at full speed, you're missing the provider bridge.
 - **Don't use exactly `0ms` in a universal kill-switch** — use a near-zero value so `transitionend`/`animationend` still fire.
 - **Don't skip the "reduced" middle tier** if your users are diverse — accessibility guidance increasingly recognizes that "some motion, less of it" and "zero motion" are different needs, not the same request at different intensities.
+- **Don't assume the near-zero-duration kill-switch "turns off" a looping animation** — it freezes it at an arbitrary keyframe (usually `0%`). Any `infinite` animation whose meaning is carried by the animated property needs an explicit reduced-motion `animation: none` + a designed held value, or the state renders as whatever its 0% frame happens to be (which can be its *dimmest/emptiest* — the opposite of the intended read).
