@@ -12,8 +12,10 @@ last_verified: 2026-07-24
 > no error, no warning, and no failed network request anywhere. Rust panics keep
 > flowing the whole time, so the dashboard looks alive.
 >
-> Diagnosed in Playmoir (Tauri 2 + React + `tauri-plugin-sentry`) on 2026-07-24
-> after most of a night. Upstream still unfixed as of that date.
+> Hit and independently root-caused in Playmoir (Tauri 2 + React +
+> `tauri-plugin-sentry`) on 2026-07-24 after most of a night. It had already
+> been diagnosed publicly seven weeks earlier — see **Upstream status** for the
+> credit and, more usefully, for why an accepted root cause still has no fix.
 
 ## The symptom
 
@@ -130,12 +132,30 @@ repo's file-size / docs-coverage rules; it is third-party code.
 
 ## Upstream status
 
-As of **2026-07-24**, verified by reading
-`getsentry/sentry-rust` master's `sentry-types/src/protocol/v7.rs` directly:
-**no `sourcemap` variant exists.** Known-but-undiagnosed reports:
+All of the following verified on **2026-07-24** by reading the sources directly,
+not from memory.
 
-- https://github.com/getsentry/sentry-javascript-bundler-plugins/issues/916
-- https://github.com/timfish/sentry-tauri/issues/35
+**Prior art — this was diagnosed publicly before we hit it.** Credit where it's
+due: `ottosson` posted the identical cause chain (closed `DebugImage` enum →
+`InvalidItemPayload` → the plugin's error-free `if let Ok`) on
+[bundler-plugins#916](https://github.com/getsentry/sentry-javascript-bundler-plugins/issues/916)
+on **2026-06-02**, with a minimal reproducer
+([sentry-vite-plugin-repro](https://github.com/ottosson/sentry-vite-plugin-repro))
+and a fix fork. The `sentry-tauri` maintainer agreed the next day. If you land
+here, read that thread first — it is the canonical write-up. Cross-posted at
+[sentry-tauri#35](https://github.com/timfish/sentry-tauri/issues/35).
+
+**Nothing has shipped since.** `timfish/sentry-tauri`'s last commit is
+2026-02-11 (predating the diagnosis), so the silent `if let Ok` is still live,
+and `getsentry/sentry-rust` master still has no `sourcemap` variant.
+
+**The fix is filed in the wrong place.** As of today a GitHub search of
+`getsentry/sentry-rust` for a `sourcemap` / `DebugImage` issue returns **zero
+results**. The diagnosis lives entirely on the *bundler plugin's* tracker, which
+is the one repo that turned out not to be at fault. That is very likely why a
+seven-week-old accepted root cause has produced no fix: nobody opened it against
+the crate that has to change. If you are blocked on this, filing there is worth
+more than another +1 on #916.
 
 **Remove the vendor when** upstream ships a `sourcemap` `DebugImage` variant (or
 tolerant envelope parsing) AND `tauri-plugin-sentry` depends on that release.
