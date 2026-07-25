@@ -1,7 +1,7 @@
 ---
 stack: [react, css, framer-motion, animation]
 kind: pattern
-last_verified: 2026-07-08
+last_verified: 2026-07-25
 ---
 
 # Shared-element "morph" transitions: a clip-path FLIP variant, and why mixing animation engines causes jutter
@@ -53,7 +53,39 @@ useLayoutEffect(() => {
 
 Meanwhile `transform`/`opacity` keep going through the JS library's normal `animate` prop (WAAPI path). Now all THREE properties ride the same thread with matched timing, and the drift disappears. The general rule: **when a shared-element transition couples multiple CSS properties that must move in exact lockstep, verify they're all on the same animation engine/thread — don't assume your animation library treats every property identically under the hood.** If one property's browser-native interpolation support is shakier than another's (clip-path is the common offender), that property is the one likely to get silently downgraded to a different execution path.
 
-## Two supporting techniques worth stealing independently
+## The other timing trap: discrete hand-offs must OVERLAP, never meet
+
+The section above is about two engines drifting during a *continuous* animation. This one is its discrete cousin, and it produces an intermittent flash rather than jutter.
+
+Every shared-element morph ends in a hand-off: the flying ghost (or the expanded surface) goes away, and the real element it was standing in for becomes visible. The whole illusion rests on those two things being pixel-identical at that instant — which is exactly why it's tempting to schedule both for the same timestamp.
+
+Don't. If the two events are driven by different mechanisms — say a CSS `animation-delay` revealing the real element, and your animation library's `AnimatePresence` unmounting the ghost — they are two independent clocks aimed at one moment. A single frame of skew resolves one of two ways:
+
+- **Ghost leaves last** → both are on screen for a frame. Invisible, because they're identical. Fine.
+- **Ghost leaves first** → neither is on screen for a frame. A hole punched through to whatever is behind. **That's the flash.**
+
+You don't control which one wins, and it varies run to run with main-thread load — so the bug is intermittent, unreproducible on demand, and reads like a rendering glitch rather than a logic error.
+
+**The rule: schedule the incoming element to appear BEFORE the outgoing one leaves, with enough margin to absorb scheduling jitter (~100ms is plenty).** An overlap is invisible by construction — the two surfaces matching is the premise of the morph. A gap is never invisible.
+
+```
+      reveal real element (t=300)
+              ↓
+  ─────────────┬──────────────────
+               │  both present    │   ← invisible, this is the safe zone
+  ─────────────┴──────────────────
+                        ↑
+              unmount ghost (t=400)
+```
+
+Concretely, if the retraction runs 400ms, reveal the underlying element at ~300ms rather than at 400ms. During the overlap the retracting surface is opaque and on top, and by 300ms an ease-out curve has it at ~97% of its final size — the two are indistinguishable.
+
+Two corollaries:
+
+- **Prefer a step to a fade at a hand-off.** Reveal the incoming element with a ~0ms opacity step early, not a fade timed to land exactly at the swap. A fade timed to the instant is the same race with extra frames in which to notice it.
+- **An "invisible snap" only stays invisible while something still covers it.** The snap is doing its job *because* another layer is on top when it fires. If you later soften that snap into a crossfade "to make it smoother," you remove the cover and expose everything the snap was hiding — reliably making the transition worse. That's a real regression that shipped in the project this was extracted from, in a commit whose message says it was fixing the very symptom it caused.
+
+
 
 **Adaptive wait for an async-mounted measurement target**, instead of a fixed timeout guess:
 
@@ -79,4 +111,6 @@ rAF-polling (bounded, e.g. 12 attempts ≈ 200ms) adapts to real mount latency �
 
 - Don't scale a rasterized image/text node between two very different sizes as your primary technique — the intermediate blur is visible on anything but tiny size deltas.
 - Don't clip to either endpoint rect alone — always use the union bounding box, or content taller/wider than the smaller rect gets silently cut off.
+- Don't schedule a hand-off's two halves (reveal the real element / remove the ghost) for the same timestamp from two different mechanisms. Overlap them. Meeting exactly is a coin-flip between "invisible" and "one-frame hole."
+- Don't soften an invisible snap into a crossfade to make it "smoother" without checking what the snap was hiding — the snap is usually invisible *because* another layer still covers it at that instant.
 - Don't assume "same animation library, same `animate()` call" means "same execution thread" for every property you're animating together. Verify the properties that must stay in lockstep are actually on the same thread; if one drifts, suspect a per-property engine fallback.
