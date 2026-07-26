@@ -31,14 +31,39 @@ If the cwd contains `.claude/worktrees/` OR the branch starts with `claude/`, **
 > 1. **Use the CLI (guaranteed).** Quit this session. Open Git Bash / Windows Terminal. `cd` into your project root and run `claude`. The new session will land on `main`.
 > 2. **Desktop Reddit workaround.** Settings → Claude Code → Desktop: Worktree location → set Custom folder location to `C:\Program Files` (or any admin-only path). Desktop will fail to create the worktree and fall back to the main checkout. Quit and restart this session to verify.
 
-**Only proceed to Step 1 if BOTH** `pwd` does NOT contain `.claude/worktrees/` **AND** the branch is `main`.
+**Only proceed to Step 0.5 if BOTH** `pwd` does NOT contain `.claude/worktrees/` **AND** the branch is `main`.
+
+## Step 0.5 — Sync guard (BEFORE reading a single doc)
+
+Run:
+
+```bash
+git fetch origin --prune
+git status -sb
+```
+
+**`git status` reporting "up to date with 'origin/main'" is NOT a live check.** It compares `HEAD` against the local remote-tracking ref `refs/remotes/origin/main`, which only moves on `fetch` / `pull` / `push`. Without the fetch above it is reporting agreement with whenever this machine last talked to the remote — which can be days.
+
+Then act on what `git status -sb` shows:
+
+| State | Action |
+|---|---|
+| Up to date | Proceed to Step 1. |
+| `[behind N]`, tree clean | `git pull --ff-only`, then proceed. Report the pull in the status line. |
+| `[behind N]`, tree dirty | **STOP.** Surface the uncommitted changes + the behind-count to the user and let them decide. Do not stash, do not merge. |
+| `[ahead N, behind M]` (diverged) | **STOP.** Surface it. Never auto-merge or rebase at session start. |
+| Fetch failed (offline) | Proceed, but say so in the report — currency is **unverified**, not confirmed. |
+
+**Why this is Step 0.5 and not part of the later git step.** Every file the doc-reading steps below touch (`CURRENT_STATE.md`, `SESSION_LEDGER.md`, `HANDOFF_LOG.md`, `ROADMAP.md`) is a tracked repo file. Reading them from a checkout that is behind `origin` loads a snapshot of the past — and **the cross-check step cannot catch it**, because that check only tests whether the docs agree with *each other*, and stale docs agree perfectly. A stale checkout does not look broken; it looks complete.
+
+> **Why this rule exists (2026-07-25, Playmoir):** a session opened 8 commits / ~18 hours behind because the previous session had run on a second machine. `git status` said "up to date with 'origin/main'" (true, against an 18-hour-old ref), so the status report named a ledger item as the NEXT ACTION that had been closed five hours earlier, and miscounted open items in three places. Nothing in `/start` fetched. **Any protocol step that reads a git-backed source of truth must pull first** — this applies equally to sibling repos a session reads (knowledge bases, shared config, docs repos), not just the project checkout.
 
 Execute these steps in order:
 
 1. Read `docs/CURRENT_STATE.md` for the latest project snapshot.
 2. Read `docs/SESSION_LEDGER.md` — the append-and-strike ledger of open session-scoped items (queued tests, gates, riders). Count the open `[ ]` items and note any that bear on the NEXT ACTION (e.g. an open pre-release gate when the next action is a release).
 3. Read the last 5 lines of `docs/HANDOFF_LOG.md` for recent session summaries.
-4. Run `git update-index --really-refresh > /dev/null 2>&1 || true` to clear phantom-dirty stat entries — files git thinks are modified but are byte-identical to HEAD. Stale mtimes can come from any fresh checkout, and the refresh is a cheap no-op when there's nothing to do. Then run `git status` and `git log --oneline -5`. If `git status` still shows changes after the refresh, those are real and must be surfaced to the user in Step 5 — they indicate the previous `/end` did not achieve a clean tree, which is a protocol violation to flag.
+4. **Working-tree check** (Step 0.5 already handled the remote). Run `git update-index --really-refresh > /dev/null 2>&1 || true` to clear phantom-dirty stat entries — files git thinks are modified but are byte-identical to HEAD. Stale mtimes can come from any fresh checkout, and the refresh is a cheap no-op when there's nothing to do. Then run `git status` and `git log --oneline -5`. If `git status` still shows changes after the refresh, those are real and must be surfaced to the user in Step 5 — they indicate the previous `/end` did not achieve a clean tree, which is a protocol violation to flag.
 5. Run the project's security audit command (e.g. `pnpm audit --prod`, `npm audit`, `cargo audit`). Silent on green — only mention if there are non-zero findings.
 6. Read the **"status at a glance" spine in `ROADMAP.md`** — the single source of truth for where the project stands (which phase/block is CURRENT).
 7. **CROSS-CHECK before reporting (mandatory — this is the step that prevents drift).** Confirm `CURRENT_STATE.md`'s NEXT ACTION agrees with (a) the spine's CURRENT phase/block, (b) the last HANDOFF line's "Next:", (c) recent commits, and (d) no open `[ ]` `SESSION_LEDGER.md` gate contradicts it. **If any contradict each other, STOP and surface the contradiction to the user — do not silently pick one and proceed.**
@@ -47,6 +72,7 @@ Execute these steps in order:
    - What was accomplished last session
    - The single **NEXT ACTION** — or, if the cross-check failed, the flagged contradiction
    - Open ledger items: N (call out any that gate the next action)
+   - **Sync:** `synced to origin @ <short-sha>` — and `(pulled N)` if Step 0.5 fast-forwarded, or `(⚠️ fetch failed — currency unverified)` if it couldn't reach the remote. State currency explicitly every session; never let it be assumed.
 
 **Trust, but verify.** `CURRENT_STATE.md` is the working snapshot but it's hand-written and CAN be wrong. The ROADMAP spine wins on any status disagreement, and `CURRENT_STATE.md` gets fixed — never silently work around either. Numbers are frozen (never renumber; a cut item stays a labeled gap). **Do not** read every handoff or every doc.
 

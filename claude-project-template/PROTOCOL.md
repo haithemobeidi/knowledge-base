@@ -45,18 +45,22 @@ The single source of truth for **project status** is a **"status at a glance" sp
 The user can still type `/start` explicitly to force the full protocol (e.g. after the hook fails). When they do — or when they say "start session" — execute these steps in order:
 
 1. **Worktree guard first** — if cwd contains `.claude/worktrees/` OR the branch starts with `claude/`, STOP and tell the user. Do not proceed with any other steps. (See `.claude/commands/start.md` for the exact verbatim message.) The SessionStart hook also catches this, but typing `/start` re-runs the check.
-2. If `CURRENT_STATE.md`, `SESSION_LEDGER.md`, and the last 5 handoff lines are NOT already in context (the SessionStart hook would have injected them), read them now.
-3. Run `git update-index --really-refresh` (clears phantom-dirty stat entries), then `git status` and `git log --oneline -5`. If `git status` still shows changes after the refresh, those are real and must be surfaced to the user — they indicate the previous `/end` did not achieve a clean tree, which is a protocol violation worth flagging.
-4. **Security audit on session start.** Run the package-manager's audit command for the project's primary lockfile (`pnpm audit --prod`, `npm audit`, `cargo audit`, etc.). Report only if non-zero findings — silent on green. Catches supply-chain regressions before they ride into the next session's work.
-5. Read the **"status at a glance" spine in `ROADMAP.md`** — the source of truth for where the project stands.
-6. **CROSS-CHECK before reporting (mandatory — this is the step that prevents drift).** Confirm `CURRENT_STATE.md`'s NEXT ACTION agrees with (a) the spine's CURRENT phase/block, (b) the last HANDOFF line's "Next:", (c) what recent commits suggest, and (d) no open `[ ]` ledger gate contradicts it. **If any contradict each other, STOP and surface the contradiction to the user — do not silently pick one and proceed.** A stale `CURRENT_STATE` that says "next: X" while the spine/handoff say "Y" is exactly the failure this check exists to catch.
-7. Report a 4-line status to the user:
+2. **Sync guard — `git fetch origin --prune`, then `git status -sb`, BEFORE reading any doc.** Clean + `[behind N]` → `git pull --ff-only`. Dirty-and-behind, or diverged → **STOP and surface**; never stash, merge, or rebase at session start. Offline → proceed but report currency as *unverified*. `git status` saying "up to date" without a fetch is not evidence of anything: it compares `HEAD` against the local remote-tracking ref, which moves only on fetch/pull/push.
+3. If `CURRENT_STATE.md`, `SESSION_LEDGER.md`, and the last 5 handoff lines are NOT already in context (the SessionStart hook would have injected them), read them now.
+4. Run `git update-index --really-refresh` (clears phantom-dirty stat entries), then `git status` and `git log --oneline -5` (working-tree check; step 2 already handled the remote). If `git status` still shows changes after the refresh, those are real and must be surfaced to the user — they indicate the previous `/end` did not achieve a clean tree, which is a protocol violation worth flagging.
+5. **Security audit on session start.** Run the package-manager's audit command for the project's primary lockfile (`pnpm audit --prod`, `npm audit`, `cargo audit`, etc.). Report only if non-zero findings — silent on green. Catches supply-chain regressions before they ride into the next session's work.
+6. Read the **"status at a glance" spine in `ROADMAP.md`** — the source of truth for where the project stands.
+7. **CROSS-CHECK before reporting (mandatory — this is the step that prevents drift).** Confirm `CURRENT_STATE.md`'s NEXT ACTION agrees with (a) the spine's CURRENT phase/block, (b) the last HANDOFF line's "Next:", (c) what recent commits suggest, and (d) no open `[ ]` ledger gate contradicts it. **If any contradict each other, STOP and surface the contradiction to the user — do not silently pick one and proceed.** A stale `CURRENT_STATE` that says "next: X" while the spine/handoff say "Y" is exactly the failure this check exists to catch.
+8. Report a 4-line status to the user:
    - Where we are (phase/block **name + number** from the spine)
    - What was accomplished last session
    - The single **NEXT ACTION** — or, if the cross-check failed, the flagged contradiction
    - Open ledger items: N (call out any that gate the next action)
+   - **Sync:** `synced to origin @ <sha>`, plus `(pulled N)` or `(⚠️ fetch failed — currency unverified)`.
 
 **Trust, but verify.** `CURRENT_STATE.md` is the working snapshot, but it is hand-written and CAN be wrong. The ROADMAP spine wins on any status disagreement, and `CURRENT_STATE.md` gets fixed — never silently work around either. Numbers are frozen (never renumber). **Do not** read every handoff or every doc.
+
+**"Up to date" is only meaningful after a fetch.** `git status` reporting *"up to date with 'origin/main'"* compares `HEAD` against the local remote-tracking ref, which moves **only** on fetch/pull/push — it is not a network check. And the cross-check step cannot rescue a stale checkout: it tests whether the docs agree *with each other*, and docs that are all stale by the same N commits agree perfectly. A stale checkout does not look broken; it looks complete. This generalizes past the project repo — **any** git-backed source of truth a session reads (knowledge base, shared config, docs repo) must be pulled before it is trusted.
 
 ---
 
