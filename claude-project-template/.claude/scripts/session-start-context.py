@@ -85,6 +85,41 @@ def remote_state(project_dir: str) -> tuple[int, int, bool, bool]:
     return behind, ahead, dirty, fetch_ok
 
 
+def open_ledger_view(text: str) -> tuple[str, int, int]:
+    """Return the ledger header + ONLY the open `[ ]` item blocks.
+
+    Returns (filtered_text, open_count, closed_count).
+
+    Closed items ([x]/[-]) keep their full pre-closure text struck through
+    in the file, so a single closed line can run hundreds of words. In the
+    origin project they grew this hook's payload to ~114KB by 2026-07-26 —
+    past the model's per-read token cap, which forced the session to
+    grep-and-slice its own start context. Closed lines are history, not
+    context: they live in the file and in git, and are deliberately never
+    injected.
+    """
+    header: list[str] = []
+    blocks: list[list[str]] = []
+    current: list[str] | None = None
+    in_items = False
+    for ln in text.splitlines():
+        s = ln.lstrip()
+        if s.startswith("- ["):
+            in_items = True
+            current = [ln]
+            blocks.append(current)
+        elif not in_items:
+            header.append(ln)
+        elif s and current is not None:
+            # Non-blank line after an item line = continuation of that item.
+            current.append(ln)
+        # Blank lines between items are dropped; items re-join one per line.
+    open_blocks = [b for b in blocks if b[0].lstrip().startswith("- [ ]")]
+    body = "\n".join("\n".join(b) for b in open_blocks)
+    filtered = "\n".join(header).rstrip() + "\n\n" + body
+    return filtered, len(open_blocks), len(blocks) - len(open_blocks)
+
+
 def emit(text: str) -> None:
     payload = {
         "hookSpecificOutput": {
@@ -141,8 +176,10 @@ def main() -> None:
         else:
             resolution = (
                 f"The tree is clean and strictly {behind} behind. Run `git pull --ff-only`, then "
-                "read `docs/CURRENT_STATE.md`, `docs/SESSION_LEDGER.md`, the ROADMAP status "
-                "spine, and the last 5 `docs/HANDOFF_LOG.md` lines YOURSELF before reporting."
+                "read `docs/CURRENT_STATE.md`, the OPEN `[ ]` lines of `docs/SESSION_LEDGER.md` "
+                "(grep `- [ ]` — do not read closed lines, they are huge and are history), the "
+                "ROADMAP status spine, and the last 5 `docs/HANDOFF_LOG.md` lines YOURSELF "
+                "before reporting."
             )
         emit(
             "## ⚠️ Session context NOT auto-loaded — this checkout is behind origin\n\n"
@@ -178,15 +215,22 @@ def main() -> None:
             pass
 
     # Open-item ledger — the append-and-strike record of session-scoped open
-    # items (queued tests, gates, riders). Injected whole: it is small by
-    # design (open items + <7-day-old struck lines, pruned at /end), and its
-    # header carries the during-session rules the agent must follow. Silently
-    # skipped if the project has no ledger file.
+    # items (queued tests, gates, riders). Injected FILTERED: header rules +
+    # open `[ ]` items only. Closed lines carry their full struck-through
+    # history and are never injected — see open_ledger_view's docstring.
+    # Silently skipped if the project has no ledger file.
     ledger_path = pathlib.Path(project_dir) / "docs" / "SESSION_LEDGER.md"
     if ledger_path.exists():
         try:
-            parts.append("\n### docs/SESSION_LEDGER.md — open-item ledger\n")
-            parts.append(ledger_path.read_text(encoding="utf-8").rstrip() + "\n")
+            filtered, n_open, n_closed = open_ledger_view(
+                ledger_path.read_text(encoding="utf-8")
+            )
+            parts.append(
+                f"\n### docs/SESSION_LEDGER.md — OPEN items only ({n_open} open; "
+                f"{n_closed} closed line(s) omitted — closed items are history, "
+                "read the file only if one is explicitly needed)\n"
+            )
+            parts.append(filtered.rstrip() + "\n")
         except OSError:
             pass
 
@@ -230,7 +274,8 @@ def main() -> None:
     parts.append(
         "\n---\n"
         "**Action requested — session start.** The hook fetched origin (Step 0.5) and "
-        "auto-loaded CURRENT_STATE.md, the SESSION_LEDGER (if present), the ROADMAP status "
+        "auto-loaded CURRENT_STATE.md, the SESSION_LEDGER's open items (if present; closed "
+        "lines are omitted by design — never read them at start), the ROADMAP status "
         "spine (if present), and the last HANDOFF lines (Steps 1–5 of /start). Now:\n"
         "1. **CROSS-CHECK (mandatory).** Does CURRENT_STATE's NEXT ACTION agree with the "
         "ROADMAP spine's CURRENT phase/block AND the last HANDOFF line's 'Next:', AND does "
