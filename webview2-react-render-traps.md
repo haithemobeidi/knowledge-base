@@ -1,7 +1,7 @@
 ---
 stack: [tauri, react, webview2]
 kind: gotcha
-last_verified: 2026-07-21
+last_verified: 2026-07-26
 ---
 
 # WebView2 + React render traps — gotchas that don't exist in Chrome dev
@@ -344,6 +344,26 @@ For each match, look at every `useState` in the file. If a state variable is set
 
 ---
 
+## Trap 10: Tauri's asset protocol is NOT same-origin — canvas pixel reads silently taint
+
+**Symptom:** a canvas-based pixel probe (`drawImage` + `getImageData` for brightness/flatness/color sampling) throws `SecurityError` — or worse, you catch the error and "trust" the image, so the check is silently dead. Everything *looks* fine; the feature just never fires. A wrong "same-origin, safe to sample" comment can survive in-code for weeks.
+
+**Cause:** in a Tauri app the page origin is `http://localhost:1420` (dev) or `tauri://localhost` / `http://tauri.localhost` (prod), but local files served via `convertFileSrc` arrive from `http(s)://asset.localhost` — a **different origin**. (On Windows it's plain `http://asset.localhost`, so an `https`-only allowlist check also silently fails.) An `<img>` without usable CORS headers drawn to a canvas taints it; `getImageData` then throws. Adding `crossOrigin="anonymous"` often breaks the *display* path instead, so teams remove it and the sampling dies quietly.
+
+**Fix:** don't sample pixels through the DOM at all. Route pixel reads through the backend: a Rust command reads the file bytes → return them (or hand back a `blob:` URL created from the bytes) → decode into an `ImageBitmap`/`Image` from the blob → canvas sampling is taint-free, because blob URLs share the page's origin. Keep the DOM `<img>` for display only.
+
+**Rule of thumb:** any "read pixels back" feature in a Tauri app needs the bytes route from day one. Audit for it: `grep -rn "getImageData" src/` and check what origin each source image actually loads from.
+
+## Trap 11: animating an ancestor's opacity cuts a child's `backdrop-filter` off from its backdrop
+
+**Symptom:** a frosted-glass child (e.g. a `backdrop-filter: blur()` shelf over a cover image) renders with its tint but **no blur/darkening of what's behind it** while an entrance/exit animation plays, then the frost "pops in" the moment the animation ends. Reads as a paint glitch; it's spec behavior.
+
+**Cause:** per the Filter Effects spec, an element with `opacity < 1` (also `filter`, `mask`, `mix-blend-mode`…) becomes a **backdrop root**: descendants' `backdrop-filter` may only sample content *within* that isolated group — not the page behind it. So a CSS keyframe animating the *parent's* opacity legally blinds every glass child for the entire animation (including any `animation-delay` with `both` fill). An element's **own** animated opacity does not isolate it.
+
+**Fix:** never animate opacity on an ancestor of a `backdrop-filter` element. Move the fade onto each piece individually — the glass layer animates its *own* opacity (fine), siblings animate theirs. `transform` on the ancestor is safe (not a backdrop-root trigger); it's specifically the group-creating properties.
+
+**How this bites in refactors:** the glass styles lived ON the animated element (worked); someone extracts the frost to a static child for a legitimate reason (e.g. isolating it from per-second repaints — see WebView2 rasterizer flakiness), and the pop-in regression appears only on the animated path. The refactor and the symptom look unrelated.
+
 ## Symptoms → cause quick reference
 
 | Symptom | Likely trap |
@@ -357,6 +377,8 @@ For each match, look at every `useState` in the file. If a state variable is set
 | Flight/morph shows blank frame mid-animation | Trap 7 — pre-decode the image |
 | `getBoundingClientRect()` returns wrong rect | Trap 8 — separate mutation and measurement |
 | Polled panel updates some fields, others stay frozen | Trap 9 — interval callback misses a setter |
+| Canvas `getImageData` throws (or a caught check silently never fires) on local images | Trap 10 — asset.localhost isn't same-origin; sample via backend bytes → blob |
+| Frosted glass shows tint but no blur during an animation, pops in at the end | Trap 11 — ancestor opacity animation creates a backdrop root |
 
 ---
 

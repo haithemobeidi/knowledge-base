@@ -1,7 +1,7 @@
 ---
 stack: [react, framer-motion, animation]
 kind: gotcha
-last_verified: 2026-07-25
+last_verified: 2026-07-26
 ---
 
 # Exit-animation props are captured at unmount — a flag set in the same batch is too late
@@ -70,6 +70,14 @@ Note the ordering requirement: `flushSync` must come *before* whatever removes t
 ## How to confirm it in 30 seconds
 
 Give each branch a wildly different, obviously distinguishable transition — `duration: 3` on one, `duration: 0` on the other — and trigger the path. If the one that plays isn't the one you expect, the props are stale. This beats logging, because a `console.log` inside the render body fires on renders that aren't the captured one and will happily print the value you *want* to see.
+
+## Failure mode 2: the exit's UNMOUNT can be dropped entirely (verified live, 2026-07-26)
+
+The stale-capture bug plays the *wrong* exit. There's a worse cousin: the exit plays and the **removal never happens**. AnimatePresence keeps the leaving child mounted while it animates the captured snapshot, then unmounts it when the exit resolves — but that unmount is bookkeeping inside the library, and a heavy re-render storm landing mid-exit (a data-invalidation burst, a context flip re-rendering the app shell) can drop it. Diagnosed from live DOM dumps, not theory: a full-screen overlay stranded **mounted, laid out, `opacity: 0`, `pointer-events: auto`** — an invisible sheet eating every click, with zero running animations. The app looks frozen while rendering fine. Repeated three times with three different re-render triggers before the mechanism was captured.
+
+Two mitigations work but leak (exit carries `pointerEvents: 'none'` + `transitionEnd: { visibility: 'hidden' }`, so a dropped unmount strands one *inert* subtree; per-open `key` so a poisoned exit entry can't swallow the next open). **The structural cure is to stop using exit-time bookkeeping for anything load-bearing:** render the overlay as a plain conditional, drive the exit visuals through `animate` props reading live state (a `closing` flag), and let your own close timeline clear the state — clearing it IS the unmount. A conditional render cannot strand: when state says closed, React unmounts; there is no library bookkeeping to lose. Bonus: every `flushSync` workaround from failure mode 1 becomes deletable, because live `animate` props never capture anything.
+
+When to accept the trade: you lose AnimatePresence's convenience of "unmount whenever the exit happens to finish" and must own the timing constants yourself. For a surface where a stranded invisible sheet means "app unusable," that trade is obviously right; for a decorative toast, the mitigation pattern is enough.
 
 ## The general rule
 
