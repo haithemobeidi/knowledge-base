@@ -1,7 +1,7 @@
 ---
 stack: [any, local-first-sync, monorepo, codegen, zod]
 kind: pattern
-last_verified: 2026-07-26
+last_verified: 2026-07-27
 ---
 
 # N copies of one schema must agree — build the drift-guard, don't rely on discipline
@@ -46,6 +46,50 @@ Both were caught by a human noticing wrong behavior in the UI, not by tooling. B
 The N-copies problem has a time-axis twin that no consistency check can catch: **a local clone of a source of truth is stale by default, and a stale clone doesn't look broken — it looks complete and self-consistent.** Two independent instances hit the SAME day (2026-07-25): a project checkout opened 8 commits behind (its status docs confidently reported a closed item as the next action — `git status` said "up to date," which only compares against the last-fetched ref), and a knowledge-base clone used to answer "is this topic already covered?" while 16 commits behind (it reported "not covered" for topics that were, nearly filing a duplicate).
 
 The structural point: **internal-consistency checks cannot detect staleness.** Stale copies of a set of documents agree with each other perfectly. The only defense is procedural and dumb: *any workflow step that READS a git-backed source of truth starts with a fetch/pull* — session-start protocols, coverage checks, doc generators, anything. Put the pull IN the step's script/checklist, before the read, not as general advice. And treat "up to date with origin/X" from `git status` as meaning "up to date with the last time this machine talked to the remote," which without a fetch can be days.
+
+## The destructive variant: a "reader" that is secretly a writer
+
+Everything above assumes the failure mode is **absence** — a field silently doesn't arrive. There is a nastier sibling where the failure mode is **destruction**, and the drift-guard as described will not catch it, because the offending layer isn't a schema copy at all.
+
+The setup: two independent paths populate the same rows. A streaming/replication path (the one everybody thinks about), and a **bootstrap or fallback path** — a plain REST endpoint that fetches "the current set" and writes it locally on login, on a manual refresh, or for users who aren't on the streaming tier. The second path is filed mentally under *reading*, so it never occurs to anyone that it's a copy of the truth.
+
+Then someone adds a column, walks the documented lockstep (DB → sync rules → client schema → write allowlist → server registry), and ships. The bootstrap endpoint isn't on that list, so its `SELECT` still doesn't carry the new column. Now look at what it does with what it fetched:
+
+```sql
+INSERT INTO games (id, name, reminder_at, ...)
+VALUES ($1, $2, $3, ...)
+ON CONFLICT(id) DO UPDATE SET
+  name        = excluded.name,
+  reminder_at = excluded.reminder_at,   -- <-- unconditional
+  ...
+```
+
+`excluded.reminder_at` is NULL, because the source this path fetched from never selected the column. So every routine library refresh **erases a value the user set**, on a path whose entire job was supposed to be reading. Not "the field doesn't show up." The field is destroyed, repeatedly, in the background.
+
+Why it survives all the usual nets:
+
+- **The lockstep checklist misses it** — the checklist enumerates *schema layers*, and this is a *route*.
+- **The drift-guard misses it** — the guard compares column lists between schema definitions. A hand-written `SELECT` inside a request handler isn't one of them.
+- **Nothing throws.** A partial row is a perfectly valid row.
+- **It only reproduces on the second write.** The first sync sets the value; the erasure needs a later refresh, so it won't show up in the "does it save?" test you just ran.
+
+In the incident this comes from, the only thing that caught it was that the call site was **strictly typed** — adding two fields to the shared input interface made the compiler point at the one caller that couldn't supply them. With a loosely typed boundary (`any`, a bare `as`, an untyped JSON handoff) it ships as silent, recurring data loss.
+
+### Three fixes, in order of leverage
+
+1. **When adding a column, enumerate WRITE PATHS, not schema layers.** Grep the codebase for everything that ends in `INSERT` / `ON CONFLICT` / `UPSERT` / `PATCH` against that table and ask each one "can this run with a partial source?" A path that can write a row IS a copy of the truth, whatever you call it.
+2. **Make partial-source upserts structurally incapable of erasing.** Either omit the column from the `DO UPDATE SET` list on that path, or write it defensively so a missing source value preserves what's there:
+   ```sql
+   reminder_at = COALESCE(excluded.reminder_at, games.reminder_at)
+   ```
+   Pick per column deliberately: `COALESCE` means the path can never clear the field, which is wrong for columns where NULL is a meaningful value the path is authoritative for (a tombstone being lifted, a status being unset). The general rule is that **only a path that is authoritative for a column may write NULL to it.**
+3. **Type the boundary strictly, precisely so the compiler forces the question.** The strict interface is what converted "silent data loss discovered by a user weeks later" into "the build fails and names the file." This is the payoff for not reaching for `any` at sync boundaries.
+
+### The generalized tell
+
+> If a code path can write a row, it is one of the N copies — even when everyone on the team describes it as a reader.
+
+Bootstrap fetches, "refresh" buttons, import/restore flows, admin backfill scripts, and cache-warming jobs are all in this category. They tend to be written early, when the table has five columns and carrying all of them is trivially easy, and they quietly become erasers as the table grows.
 
 ## The fix: a script, not a reminder
 

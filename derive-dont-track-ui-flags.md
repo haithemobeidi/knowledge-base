@@ -1,10 +1,12 @@
 ---
-stack: [react, frontend, state-management]
+stack: [react, frontend, state-management, data-modelling]
 kind: pattern
-last_verified: 2026-07-08
+last_verified: 2026-07-27
 ---
 
-# A UI flag with N reset paths WILL get stuck — derive it instead
+# State with N reset paths WILL get stuck — derive it instead
+
+*(Written first about UI flags; the same shape shows up in the database, see "The same shape in your data model" below.)*
 
 **One-liner:** if a boolean UI flag has to be explicitly cleared on more than a couple of exit paths (back button, Escape, outside-click, nav-away, a cancel button, a race with another action...), it will eventually get stuck true on whichever path someone forgets to wire up. The fix isn't "find and patch the missing path" — it's eliminating the reset action entirely by **deriving** the flag from state that's already correctly maintained elsewhere.
 
@@ -38,6 +40,57 @@ const obscured = selectedItemId !== null && !isClosing;
 ```
 
 `selectedItemId` and `isClosing` both already have to be correct for the rest of the feature to work (the detail view can't render without `selectedItemId`; the close animation can't run without `isClosing`). Riding on state that already has to be right means there's no THIRD piece of state that can independently drift out of sync — the "forgot to clear it on path N" bug class is structurally impossible, because there's no clear-action left to forget.
+
+## The same shape in your data model: derive invalidation, don't handle it
+
+The principle isn't about React, or booleans, or even UI. It's about **any stored fact that N different code paths are each responsible for clearing.** The database version is the same bug with a longer memory: a stale flag in a component dies on refresh, a stale flag in a row is wrong forever.
+
+The canonical shape: a feature that promises "remind me about this in two weeks — unless I come back on my own first." The obvious implementation stores `remind_at` and then has to *notice* the coming-back:
+
+- a listener on the app's own "user did the thing" path
+- another on the background/OS watcher that detects it happening outside the app
+- another on a manual entry the user creates by hand
+- another on the sync path, because it might have happened on their other device
+- a scheduled job to clean up reminders that are no longer relevant
+- and a race to reason about, between "they came back" and "the reminder fired"
+
+Six things to get right, and every one you miss produces the exact failure the feature exists to avoid: nagging someone who already came back.
+
+**The derived version stores one more timestamp and deletes all six.** Alongside *when it fires*, store *when the promise was made*:
+
+```sql
+-- reminder_at      when the nudge should surface
+-- reminder_set_at  when the user asked for it
+
+-- "is this reminder still valid?" — no listener, no job, no race
+WHERE reminder_at IS NOT NULL
+  AND (last_played_at IS NULL OR last_played_at <= reminder_set_at)
+```
+
+`last_played_at` was already maintained, for other reasons, by machinery that already had to be correct. Coming back moves it past `reminder_set_at`, and the reminder stops being valid **by construction** — not because anything observed the return and reacted to it.
+
+What this buys, beyond fewer lines:
+
+- **No missed events.** There is no subscriber to forget to register on the seventh path that means "came back."
+- **No cleanup job.** Invalid rows aren't garbage to collect; they're just rows the predicate stops matching.
+- **No race.** "Came back" and "fired" can't interleave wrongly, because firing is a read of current state rather than a scheduled action queued in the past.
+- **Retroactively correct.** Rows written *before* the feature existed evaluate correctly the moment the column lands — an event-driven design can only ever know about events that happened after you started listening.
+- **Free across devices.** Two timestamps replicate through whatever sync you already have. An event-driven version needs the *event* to reach the other device, which is a much harder thing to guarantee than a value.
+
+### The recipe
+
+When you're about to write "on X, clear Y," stop and ask two questions:
+
+1. **Is X already recorded somewhere durable?** Usually yes, and usually as a timestamp you already keep — `last_seen_at`, `updated_at`, `last_login_at`, a status column, a monotonically increasing counter.
+2. **Can Y be re-expressed as a comparison against it?** If so, store whatever anchor makes the comparison possible (typically "when this rule was established") and delete the clearing logic entirely.
+
+The cost is usually one extra column. The saving is every future path that would otherwise have had to remember to clear it.
+
+### When it doesn't apply
+
+- **The invalidating event leaves no durable trace.** If nothing records that X happened, there's nothing to compare against, and you genuinely need to observe it. (Consider recording it — a timestamp column is cheaper than a subscriber network.)
+- **You need "exactly once" semantics.** Derived validity is a predicate, so it's naturally idempotent and stateless; if the thing must fire exactly once and never again, you still need to record the firing.
+- **The comparison gets expensive at scale.** A predicate over an unindexed column on millions of rows is worse than a maintained flag. Index it, or accept the flag with its N paths — but make that a measured decision, not the default.
 
 ## When this applies
 
