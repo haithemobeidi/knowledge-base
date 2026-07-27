@@ -1,7 +1,7 @@
 ---
 stack: [any, local-first-sync, monorepo, codegen, zod]
 kind: pattern
-last_verified: 2026-07-20
+last_verified: 2026-07-26
 ---
 
 # N copies of one schema must agree — build the drift-guard, don't rely on discipline
@@ -40,6 +40,12 @@ Two independent production bugs, same root shape, ~10 days apart:
 2. **`installed` columns** (a free-tier install-state feature) went missing from one of the schema layers in the very same session this lesson was written, and nothing caught it — because `tsc` doesn't run automatically in this project's dev loop.
 
 Both were caught by a human noticing wrong behavior in the UI, not by tooling. Both cost a debugging session that a 30-line script would have prevented.
+
+## The stale-clone variant: a git-backed source of truth that nobody pulled
+
+The N-copies problem has a time-axis twin that no consistency check can catch: **a local clone of a source of truth is stale by default, and a stale clone doesn't look broken — it looks complete and self-consistent.** Two independent instances hit the SAME day (2026-07-25): a project checkout opened 8 commits behind (its status docs confidently reported a closed item as the next action — `git status` said "up to date," which only compares against the last-fetched ref), and a knowledge-base clone used to answer "is this topic already covered?" while 16 commits behind (it reported "not covered" for topics that were, nearly filing a duplicate).
+
+The structural point: **internal-consistency checks cannot detect staleness.** Stale copies of a set of documents agree with each other perfectly. The only defense is procedural and dumb: *any workflow step that READS a git-backed source of truth starts with a fetch/pull* — session-start protocols, coverage checks, doc generators, anything. Put the pull IN the step's script/checklist, before the read, not as general advice. And treat "up to date with origin/X" from `git status` as meaning "up to date with the last time this machine talked to the remote," which without a fetch can be days.
 
 ## The fix: a script, not a reminder
 
