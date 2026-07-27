@@ -1,0 +1,673 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Knowledge Base Browser</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --bg-elevated: #ffffff;
+    --bg-sunken: #ebedf1;
+    --text: #1a1b1f;
+    --text-dim: #62636c;
+    --border: #dfe1e6;
+    --accent: #3355dd;
+    --accent-bg: #e8ecfd;
+    --code-bg: #f0f1f4;
+    --shadow: 0 4px 16px rgba(20, 22, 30, 0.08);
+  }
+  :root[data-theme="dark"] {
+    --bg: #131417;
+    --bg-elevated: #1b1c20;
+    --bg-sunken: #202126;
+    --text: #eceef2;
+    --text-dim: #9497a3;
+    --border: #2d2f36;
+    --accent: #7d95ff;
+    --accent-bg: #262c47;
+    --code-bg: #202126;
+    --shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #131417; --bg-elevated: #1b1c20; --bg-sunken: #202126;
+      --text: #eceef2; --text-dim: #9497a3; --border: #2d2f36;
+      --accent: #7d95ff; --accent-bg: #262c47; --code-bg: #202126;
+      --shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+    line-height: 1.5;
+  }
+  #app { display: flex; flex-direction: column; min-height: 100vh; }
+
+  header {
+    display: flex; align-items: center; gap: .75rem;
+    padding: .8rem 1.2rem; border-bottom: 1px solid var(--border);
+    background: var(--bg-elevated); position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { font-size: 1.05rem; margin: 0; white-space: nowrap; font-weight: 700; }
+  header .sub { font-size: .75rem; color: var(--text-dim); white-space: nowrap; }
+  #search {
+    flex: 1; min-width: 120px; padding: .5rem .75rem; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--bg-sunken); color: var(--text);
+    font-size: .9rem; outline: none;
+  }
+  #search:focus { border-color: var(--accent); }
+  .icon-btn {
+    background: var(--bg-sunken); border: 1px solid var(--border); color: var(--text);
+    border-radius: 8px; padding: .45rem .6rem; cursor: pointer; font-size: .9rem;
+  }
+  .icon-btn:hover { border-color: var(--accent); }
+  #filters-toggle { display: none; }
+
+  .layout { display: flex; flex: 1; min-height: 0; }
+  #sidebar {
+    width: 260px; flex-shrink: 0; padding: 1rem; overflow-y: auto;
+    border-right: 1px solid var(--border); background: var(--bg-elevated);
+    max-height: calc(100vh - 57px); position: sticky; top: 57px;
+  }
+  .facet-group { margin-bottom: 1.1rem; }
+  .facet-group h4 {
+    text-transform: uppercase; font-size: .68rem; letter-spacing: .06em;
+    color: var(--text-dim); margin: 0 0 .4rem; font-weight: 700;
+  }
+  .facet-option {
+    display: flex; align-items: center; gap: .45rem; font-size: .84rem;
+    padding: .2rem 0; cursor: pointer; user-select: none; color: var(--text);
+  }
+  .facet-option input { accent-color: var(--accent); cursor: pointer; }
+  .facet-option .count { margin-left: auto; color: var(--text-dim); font-size: .74rem; }
+  .facet-option.disabled { opacity: .35; }
+  #clear-filters {
+    width: 100%; margin-top: .3rem; padding: .45rem; border-radius: 8px;
+    border: 1px solid var(--border); background: transparent; color: var(--text-dim);
+    cursor: pointer; font-size: .8rem;
+  }
+  #clear-filters:hover { border-color: var(--accent); color: var(--accent); }
+
+  main { flex: 1; padding: 1rem 1.2rem; min-width: 0; }
+  #result-count { font-size: .82rem; color: var(--text-dim); margin-bottom: .7rem; }
+  #card-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: .8rem;
+  }
+  .card {
+    background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 12px;
+    padding: .9rem 1rem; cursor: pointer; transition: border-color .12s, transform .12s;
+    display: flex; flex-direction: column; gap: .4rem;
+  }
+  .card:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .card-top { display: flex; align-items: center; gap: .5rem; }
+  .badge {
+    font-size: .68rem; font-weight: 700; padding: .18rem .55rem; border-radius: 999px;
+    background: hsl(var(--hue) 65% 92%); color: hsl(var(--hue) 55% 32%); white-space: nowrap;
+  }
+  @media (prefers-color-scheme: dark) {
+    .badge { background: hsl(var(--hue) 40% 22%); color: hsl(var(--hue) 70% 78%); }
+  }
+  :root[data-theme="dark"] .badge { background: hsl(var(--hue) 40% 22%); color: hsl(var(--hue) 70% 78%); }
+  :root[data-theme="light"] .badge { background: hsl(var(--hue) 65% 92%); color: hsl(var(--hue) 55% 32%); }
+  .freshness-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .card-date { font-size: .72rem; color: var(--text-dim); margin-left: auto; }
+  .card h3 { margin: 0; font-size: .98rem; line-height: 1.3; }
+  .card .desc {
+    font-size: .84rem; color: var(--text-dim); margin: 0;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .tag-row { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: auto; padding-top: .3rem; }
+  .tag-chip {
+    font-size: .7rem; padding: .12rem .5rem; border-radius: 999px;
+    background: var(--accent-bg); color: var(--accent); cursor: pointer; border: none;
+    font-family: inherit;
+  }
+  .tag-chip.more { background: transparent; color: var(--text-dim); }
+  #empty-state { text-align: center; color: var(--text-dim); padding: 3rem 1rem; font-size: .9rem; }
+
+  #modal-backdrop {
+    position: fixed; inset: 0; background: rgba(10, 10, 14, .55);
+    display: flex; align-items: center; justify-content: center; z-index: 100; padding: 2rem 1rem;
+  }
+  #modal-backdrop.hidden { display: none; }
+  #modal {
+    background: var(--bg-elevated); border-radius: 14px; box-shadow: var(--shadow);
+    max-width: 820px; width: 100%; max-height: 88vh; display: flex; flex-direction: column;
+    border: 1px solid var(--border);
+  }
+  #modal-header {
+    display: flex; align-items: center; gap: .6rem; padding: .8rem 1.1rem;
+    border-bottom: 1px solid var(--border); flex-wrap: wrap;
+  }
+  #modal-meta { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; flex: 1; min-width: 0; }
+  #modal-tags { display: flex; flex-wrap: wrap; gap: .3rem; }
+  #modal-controls { display: flex; gap: .35rem; margin-left: auto; }
+  #modal-body { padding: 1.1rem 1.4rem 1.6rem; overflow-y: auto; }
+  #modal-body h1 { font-size: 1.4rem; margin-top: 0; }
+  #modal-body h2 { font-size: 1.15rem; margin-top: 1.6rem; border-top: 1px solid var(--border); padding-top: 1rem; }
+  #modal-body h3 { font-size: 1rem; margin-top: 1.2rem; }
+  #modal-body p { font-size: .92rem; }
+  #modal-body li { font-size: .92rem; margin: .25rem 0; }
+  #modal-body code {
+    background: var(--code-bg); padding: .1rem .35rem; border-radius: 4px;
+    font-size: .85em; font-family: "SF Mono", Consolas, Menlo, monospace;
+  }
+  #modal-body pre {
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: .8rem 1rem; overflow-x: auto;
+  }
+  #modal-body pre code { background: none; padding: 0; }
+  #modal-body blockquote {
+    border-left: 3px solid var(--accent); margin: .8rem 0; padding: .1rem 1rem;
+    color: var(--text-dim);
+  }
+  #modal-body table { border-collapse: collapse; width: 100%; margin: .8rem 0; font-size: .85rem; }
+  #modal-body th, #modal-body td { border: 1px solid var(--border); padding: .4rem .6rem; text-align: left; }
+  #modal-body th { background: var(--bg-sunken); }
+  #modal-body a { color: var(--accent); }
+  #modal-body hr { border: none; border-top: 1px solid var(--border); margin: 1.2rem 0; }
+
+  @media (max-width: 860px) {
+    #sidebar {
+      position: fixed; top: 57px; left: 0; bottom: 0; z-index: 20; width: 82vw;
+      max-width: 320px; box-shadow: var(--shadow); max-height: none;
+      transform: translateX(-100%); transition: transform .15s;
+    }
+    #sidebar.open { transform: translateX(0); }
+    #filters-toggle { display: inline-flex; }
+    header h1 { font-size: .92rem; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <button id="filters-toggle" class="icon-btn" aria-label="Toggle filters">☰</button>
+    <h1>Knowledge Base</h1>
+    <input id="search" type="search" placeholder="Search titles, tags, content…">
+    <span class="sub" id="result-count-header"></span>
+    <button id="theme-toggle" class="icon-btn" aria-label="Toggle theme">🌓</button>
+  </header>
+  <div class="layout">
+    <aside id="sidebar">
+      <div class="facet-group" id="kind-facet"></div>
+      <div id="tag-facets"></div>
+      <div class="facet-group">
+        <h4>Freshness</h4>
+        <label class="facet-option"><input type="checkbox" id="stale-only"> Stale only (&gt;6 months)</label>
+      </div>
+      <div class="facet-group">
+        <h4>Sort</h4>
+        <select id="sort-select" style="width:100%; padding:.35rem; border-radius:8px; background:var(--bg-sunken); color:var(--text); border:1px solid var(--border);">
+          <option value="recent">Recently verified</option>
+          <option value="stale">Least recently verified</option>
+          <option value="title">Title (A–Z)</option>
+          <option value="kind">Kind</option>
+        </select>
+      </div>
+      <button id="clear-filters">Clear all filters</button>
+    </aside>
+    <main>
+      <div id="result-count"></div>
+      <div id="card-grid"></div>
+      <div id="empty-state" style="display:none;">No lessons match the current filters.</div>
+    </main>
+  </div>
+</div>
+
+<div id="modal-backdrop" class="hidden">
+  <div id="modal">
+    <div id="modal-header">
+      <div id="modal-meta">
+        <span id="modal-badge" class="badge"></span>
+        <span id="modal-date" class="card-date"></span>
+        <div id="modal-tags"></div>
+      </div>
+      <div id="modal-controls">
+        <button id="modal-prev" class="icon-btn" aria-label="Previous">‹</button>
+        <button id="modal-next" class="icon-btn" aria-label="Next">›</button>
+        <button id="modal-close" class="icon-btn" aria-label="Close">✕</button>
+      </div>
+    </div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<script id="kb-data" type="application/json">__KB_DATA_JSON__</script>
+<script>
+(function () {
+  "use strict";
+  var DATA = JSON.parse(document.getElementById("kb-data").textContent);
+  var lessons = DATA.lessons;
+
+  var KIND_HUE = {
+    "howto": 150, "gotcha": 8, "pattern": 222, "architecture": 268,
+    "playbook": 186, "decision-record": 220, "postmortem-playbook": 28,
+    "dead-end-postmortem": 350, "checklist": 280, "reference": 200, "recipe": 45
+  };
+  function hueFor(kind) { return KIND_HUE.hasOwnProperty(kind) ? KIND_HUE[kind] : 210; }
+  function kindLabel(kind) {
+    return kind.split("-").map(function (w) { return w[0].toUpperCase() + w.slice(1); }).join(" ");
+  }
+
+  // ---------- state ----------
+  var state = {
+    kinds: new Set(),          // selected kind values (OR)
+    tagsByGroup: {},           // group -> Set(tags) selected (OR within group, AND across groups)
+    search: "",
+    staleOnly: false,
+    sort: "recent"
+  };
+
+  // ---------- freshness ----------
+  var MS_PER_DAY = 86400000;
+  function daysSince(dateStr) {
+    if (!dateStr) return Infinity;
+    var d = new Date(dateStr + "T00:00:00");
+    if (isNaN(d.getTime())) return Infinity;
+    return Math.floor((Date.now() - d.getTime()) / MS_PER_DAY);
+  }
+  function freshnessClass(days) {
+    if (days > 182) return "#e0483e";   // stale, > ~6 months
+    if (days > 91) return "#e0a83e";    // aging, > ~3 months
+    return "#3ea86a";                   // fresh
+  }
+
+  // ---------- sidebar ----------
+  var kindFacetEl = document.getElementById("kind-facet");
+  var tagFacetsEl = document.getElementById("tag-facets");
+
+  function kindCount(kind) {
+    return lessons.filter(function (l) { return l.kind === kind; }).length;
+  }
+  function tagCount(tag) {
+    return lessons.filter(function (l) { return l.stack.indexOf(tag) !== -1; }).length;
+  }
+
+  function buildSidebar() {
+    var h = "<h4>Kind</h4>";
+    DATA.kinds.forEach(function (k) {
+      h += '<label class="facet-option" data-kind="' + k + '">' +
+        '<input type="checkbox" value="' + k + '"> ' + kindLabel(k) +
+        '<span class="count">' + kindCount(k) + "</span></label>";
+    });
+    kindFacetEl.innerHTML = h;
+    kindFacetEl.querySelectorAll("input").forEach(function (cb) {
+      cb.addEventListener("change", function () {
+        if (cb.checked) state.kinds.add(cb.value); else state.kinds.delete(cb.value);
+        render();
+      });
+    });
+
+    var tagsHtml = "";
+    DATA.groupOrder.forEach(function (group) {
+      var tags = DATA.tagsByGroup[group] || [];
+      if (!tags.length) return;
+      tagsHtml += '<div class="facet-group"><h4>' + escapeHtml(group) + "</h4>";
+      tags.forEach(function (tag) {
+        tagsHtml += '<label class="facet-option" data-tag="' + escapeHtml(tag) + '" data-group="' + escapeHtml(group) + '">' +
+          '<input type="checkbox" value="' + escapeHtml(tag) + '"> ' + escapeHtml(tag) +
+          '<span class="count">' + tagCount(tag) + "</span></label>";
+      });
+      tagsHtml += "</div>";
+    });
+    tagFacetsEl.innerHTML = tagsHtml;
+    tagFacetsEl.querySelectorAll("input").forEach(function (cb) {
+      var label = cb.closest(".facet-option");
+      var group = label.getAttribute("data-group");
+      cb.addEventListener("change", function () {
+        if (!state.tagsByGroup[group]) state.tagsByGroup[group] = new Set();
+        if (cb.checked) state.tagsByGroup[group].add(cb.value);
+        else state.tagsByGroup[group].delete(cb.value);
+        render();
+      });
+    });
+  }
+
+  function setTagChecked(tag, group) {
+    if (!state.tagsByGroup[group]) state.tagsByGroup[group] = new Set();
+    state.tagsByGroup[group].add(tag);
+    syncSidebarChecks();
+    render();
+  }
+
+  function syncSidebarChecks() {
+    kindFacetEl.querySelectorAll("input").forEach(function (cb) {
+      cb.checked = state.kinds.has(cb.value);
+    });
+    tagFacetsEl.querySelectorAll("input").forEach(function (cb) {
+      var group = cb.closest(".facet-option").getAttribute("data-group");
+      cb.checked = !!(state.tagsByGroup[group] && state.tagsByGroup[group].has(cb.value));
+    });
+  }
+
+  document.getElementById("clear-filters").addEventListener("click", function () {
+    state.kinds.clear();
+    state.tagsByGroup = {};
+    state.staleOnly = false;
+    state.search = "";
+    document.getElementById("search").value = "";
+    document.getElementById("stale-only").checked = false;
+    syncSidebarChecks();
+    render();
+  });
+
+  document.getElementById("stale-only").addEventListener("change", function (e) {
+    state.staleOnly = e.target.checked;
+    render();
+  });
+  document.getElementById("sort-select").addEventListener("change", function (e) {
+    state.sort = e.target.value;
+    render();
+  });
+  document.getElementById("search").addEventListener("input", function (e) {
+    state.search = e.target.value.trim().toLowerCase();
+    render();
+  });
+
+  // ---------- filter/sort ----------
+  function matches(l) {
+    if (state.kinds.size && !state.kinds.has(l.kind)) return false;
+    for (var group in state.tagsByGroup) {
+      var wanted = state.tagsByGroup[group];
+      if (!wanted || !wanted.size) continue;
+      var hit = l.stack.some(function (t) { return wanted.has(t); });
+      if (!hit) return false;
+    }
+    if (state.staleOnly && daysSince(l.last_verified) <= 182) return false;
+    if (state.search) {
+      var hay = (l.title + " " + l.description + " " + l.kind + " " + l.stack.join(" ") + " " + l.content).toLowerCase();
+      if (hay.indexOf(state.search) === -1) return false;
+    }
+    return true;
+  }
+
+  function sortLessons(list) {
+    var copy = list.slice();
+    if (state.sort === "title") {
+      copy.sort(function (a, b) { return a.title.localeCompare(b.title); });
+    } else if (state.sort === "kind") {
+      copy.sort(function (a, b) { return a.kind.localeCompare(b.kind) || a.title.localeCompare(b.title); });
+    } else if (state.sort === "stale") {
+      copy.sort(function (a, b) { return daysSince(b.last_verified) - daysSince(a.last_verified); });
+    } else {
+      copy.sort(function (a, b) { return daysSince(a.last_verified) - daysSince(b.last_verified); });
+    }
+    return copy;
+  }
+
+  // ---------- rendering ----------
+  var cardGrid = document.getElementById("card-grid");
+  var resultCount = document.getElementById("result-count");
+  var resultCountHeader = document.getElementById("result-count-header");
+  var emptyState = document.getElementById("empty-state");
+  var currentList = [];
+
+  function render() {
+    var filtered = sortLessons(lessons.filter(matches));
+    currentList = filtered;
+    resultCount.textContent = filtered.length + " of " + lessons.length + " lessons";
+    resultCountHeader.textContent = filtered.length + "/" + lessons.length;
+    emptyState.style.display = filtered.length ? "none" : "block";
+
+    var html = "";
+    filtered.forEach(function (l, i) {
+      var days = daysSince(l.last_verified);
+      var visibleTags = l.stack.slice(0, 5);
+      var extra = l.stack.length - visibleTags.length;
+      html += '<div class="card" data-id="' + escapeHtml(l.id) + '">' +
+        '<div class="card-top">' +
+          '<span class="badge" style="--hue:' + hueFor(l.kind) + '">' + escapeHtml(kindLabel(l.kind)) + "</span>" +
+          '<span class="freshness-dot" style="background:' + freshnessClass(days) + '" title="last verified ' + escapeHtml(l.last_verified || "unknown") + '"></span>' +
+          '<span class="card-date">' + escapeHtml(l.last_verified || "") + "</span>" +
+        "</div>" +
+        "<h3>" + escapeHtml(l.title) + "</h3>" +
+        '<p class="desc">' + escapeHtml(l.description || "") + "</p>" +
+        '<div class="tag-row">' +
+        visibleTags.map(function (t) { return '<button class="tag-chip" data-tag="' + escapeHtml(t) + '">' + escapeHtml(t) + "</button>"; }).join("") +
+        (extra > 0 ? '<span class="tag-chip more">+' + extra + "</span>" : "") +
+        "</div></div>";
+    });
+    cardGrid.innerHTML = html;
+
+    cardGrid.querySelectorAll(".card").forEach(function (card) {
+      card.addEventListener("click", function (e) {
+        if (e.target.closest(".tag-chip")) return;
+        openModal(card.getAttribute("data-id"));
+      });
+    });
+    cardGrid.querySelectorAll(".tag-chip:not(.more)").forEach(function (chip) {
+      chip.addEventListener("click", function (e) {
+        e.stopPropagation();
+        var tag = chip.getAttribute("data-tag");
+        var group = null;
+        for (var g in DATA.tagsByGroup) { if (DATA.tagsByGroup[g].indexOf(tag) !== -1) { group = g; break; } }
+        if (group) setTagChecked(tag, group);
+      });
+    });
+  }
+
+  // ---------- modal ----------
+  var backdrop = document.getElementById("modal-backdrop");
+  var modalBadge = document.getElementById("modal-badge");
+  var modalDate = document.getElementById("modal-date");
+  var modalTags = document.getElementById("modal-tags");
+  var modalBody = document.getElementById("modal-body");
+  var currentIndex = -1;
+
+  function openModal(id) {
+    var idx = currentList.findIndex(function (l) { return l.id === id; });
+    if (idx === -1) idx = lessons.findIndex(function (l) { return l.id === id; });
+    showAt(idx);
+    backdrop.classList.remove("hidden");
+  }
+  function showAt(idx) {
+    if (idx < 0 || idx >= currentList.length) return;
+    currentIndex = idx;
+    var l = currentList[idx];
+    modalBadge.textContent = kindLabel(l.kind);
+    modalBadge.style.setProperty("--hue", hueFor(l.kind));
+    modalDate.textContent = "last verified " + (l.last_verified || "unknown");
+    modalTags.innerHTML = l.stack.map(function (t) { return '<span class="tag-chip">' + escapeHtml(t) + "</span>"; }).join("");
+    modalBody.innerHTML = renderMarkdown(l.content);
+    modalBody.scrollTop = 0;
+    document.getElementById("modal-prev").disabled = idx === 0;
+    document.getElementById("modal-next").disabled = idx === currentList.length - 1;
+  }
+  function closeModal() { backdrop.classList.add("hidden"); }
+  document.getElementById("modal-close").addEventListener("click", closeModal);
+  backdrop.addEventListener("click", function (e) { if (e.target === backdrop) closeModal(); });
+  document.getElementById("modal-prev").addEventListener("click", function () { showAt(currentIndex - 1); });
+  document.getElementById("modal-next").addEventListener("click", function () { showAt(currentIndex + 1); });
+  document.addEventListener("keydown", function (e) {
+    if (backdrop.classList.contains("hidden")) return;
+    if (e.key === "Escape") closeModal();
+    if (e.key === "ArrowLeft") showAt(currentIndex - 1);
+    if (e.key === "ArrowRight") showAt(currentIndex + 1);
+  });
+
+  // ---------- mobile sidebar ----------
+  var sidebar = document.getElementById("sidebar");
+  document.getElementById("filters-toggle").addEventListener("click", function () {
+    sidebar.classList.toggle("open");
+  });
+
+  // ---------- theme ----------
+  var themeBtn = document.getElementById("theme-toggle");
+  function applyTheme(t) {
+    if (t) document.documentElement.setAttribute("data-theme", t);
+    else document.documentElement.removeAttribute("data-theme");
+  }
+  var savedTheme = localStorage.getItem("kb-theme");
+  if (savedTheme) applyTheme(savedTheme);
+  themeBtn.addEventListener("click", function () {
+    var current = document.documentElement.getAttribute("data-theme");
+    var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    var next;
+    if (!current) next = prefersDark ? "light" : "dark";
+    else if (current === "dark") next = "light";
+    else next = "dark";
+    applyTheme(next);
+    localStorage.setItem("kb-theme", next);
+  });
+
+  // ---------- tiny markdown renderer ----------
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  function renderInline(text) {
+    var codes = [];
+    text = text.replace(/`([^`]+)`/g, function (m, code) {
+      codes.push(code);
+      return " " + (codes.length - 1) + " ";
+    });
+    text = escapeHtml(text);
+    text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function (m, t, url) {
+      return '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener">' + t + "</a>";
+    });
+    text = text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    text = text.replace(/__(.+?)__/g, "<strong>$1</strong>");
+    text = text.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
+    text = text.replace(/\b_(.+?)_\b/g, "<em>$1</em>");
+    text = text.replace(/ (\d+) /g, function (m, i) {
+      return "<code>" + escapeHtml(codes[+i]) + "</code>";
+    });
+    return text;
+  }
+
+  function isHr(line) { return /^ {0,3}([-*_])( *\1){2,} *$/.test(line); }
+  function isTableSep(line) { return /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(line) && line.indexOf("-") !== -1; }
+  function splitRow(line) {
+    var t = line.trim().replace(/^\|/, "").replace(/\|$/, "");
+    return t.split("|").map(function (c) { return c.trim(); });
+  }
+
+  function renderMarkdown(md) {
+    var lines = md.replace(/\r\n/g, "\n").split("\n");
+    var out = [];
+    var i = 0;
+    var n = lines.length;
+
+    function flushList(stack) {
+      while (stack.length) out.push(stack.pop().tag === "ol" ? "</ol>" : "</ul>");
+    }
+
+    while (i < n) {
+      var line = lines[i];
+
+      if (/^\s*$/.test(line)) { i++; continue; }
+
+      // fenced code block
+      var fence = line.match(/^```(\S*)\s*$/);
+      if (fence) {
+        var buf = [];
+        i++;
+        while (i < n && !/^```\s*$/.test(lines[i])) { buf.push(lines[i]); i++; }
+        i++; // skip closing fence
+        out.push("<pre><code>" + escapeHtml(buf.join("\n")) + "</code></pre>");
+        continue;
+      }
+
+      // heading
+      var h = line.match(/^(#{1,6})\s+(.*)$/);
+      if (h) {
+        var level = h[1].length;
+        out.push("<h" + level + ">" + renderInline(h[2].trim()) + "</h" + level + ">");
+        i++;
+        continue;
+      }
+
+      // hr
+      if (isHr(line)) { out.push("<hr>"); i++; continue; }
+
+      // table
+      if (line.indexOf("|") !== -1 && i + 1 < n && isTableSep(lines[i + 1])) {
+        var header = splitRow(line);
+        i += 2;
+        var rows = [];
+        while (i < n && lines[i].indexOf("|") !== -1 && !/^\s*$/.test(lines[i])) {
+          rows.push(splitRow(lines[i]));
+          i++;
+        }
+        var t = "<table><thead><tr>" +
+          header.map(function (c) { return "<th>" + renderInline(c) + "</th>"; }).join("") +
+          "</tr></thead><tbody>";
+        rows.forEach(function (r) {
+          t += "<tr>" + r.map(function (c) { return "<td>" + renderInline(c) + "</td>"; }).join("") + "</tr>";
+        });
+        t += "</tbody></table>";
+        out.push(t);
+        continue;
+      }
+
+      // blockquote
+      if (/^\s*>\s?/.test(line)) {
+        var qbuf = [];
+        while (i < n && /^\s*>\s?/.test(lines[i])) { qbuf.push(lines[i].replace(/^\s*>\s?/, "")); i++; }
+        out.push("<blockquote>" + qbuf.map(renderInline).join("<br>") + "</blockquote>");
+        continue;
+      }
+
+      // list
+      var ulMatch = line.match(/^(\s*)[-*+]\s+(.*)$/);
+      var olMatch = line.match(/^(\s*)\d+[.)]\s+(.*)$/);
+      if (ulMatch || olMatch) {
+        var stack = [];
+        var htmlOut = [];
+        while (i < n) {
+          var l2 = lines[i];
+          if (/^\s*$/.test(l2)) { i++; continue; }
+          var um = l2.match(/^(\s*)[-*+]\s+(.*)$/);
+          var om = l2.match(/^(\s*)\d+[.)]\s+(.*)$/);
+          if (!um && !om) break;
+          var indent = (um || om)[1].length;
+          var type = um ? "ul" : "ol";
+          var text = (um || om)[2];
+          while (stack.length && indent < stack[stack.length - 1].indent) {
+            htmlOut.push(stack.pop().tag === "ol" ? "</ol>" : "</ul>");
+          }
+          if (!stack.length || indent > stack[stack.length - 1].indent) {
+            htmlOut.push(type === "ol" ? "<ol>" : "<ul>");
+            stack.push({ indent: indent, tag: type });
+          } else if (stack[stack.length - 1].tag !== type) {
+            htmlOut.push(stack.pop().tag === "ol" ? "</ol>" : "</ul>");
+            htmlOut.push(type === "ol" ? "<ol>" : "<ul>");
+            stack.push({ indent: indent, tag: type });
+          }
+          htmlOut.push("<li>" + renderInline(text) + "</li>");
+          i++;
+        }
+        while (stack.length) htmlOut.push(stack.pop().tag === "ol" ? "</ol>" : "</ul>");
+        out.push(htmlOut.join(""));
+        continue;
+      }
+
+      // paragraph: gather consecutive plain lines
+      var pbuf = [];
+      while (i < n && !/^\s*$/.test(lines[i]) && !/^```/.test(lines[i]) && !/^(#{1,6})\s+/.test(lines[i]) &&
+             !isHr(lines[i]) && !/^\s*>\s?/.test(lines[i]) &&
+             !/^(\s*)[-*+]\s+/.test(lines[i]) && !/^(\s*)\d+[.)]\s+/.test(lines[i]) &&
+             !(lines[i].indexOf("|") !== -1 && i + 1 < n && isTableSep(lines[i + 1]))) {
+        pbuf.push(lines[i]);
+        i++;
+      }
+      if (pbuf.length) out.push("<p>" + renderInline(pbuf.join(" ")) + "</p>");
+      else i++; // safety valve
+    }
+    return out.join("\n");
+  }
+
+  // ---------- init ----------
+  buildSidebar();
+  render();
+})();
+</script>
+</body>
+</html>

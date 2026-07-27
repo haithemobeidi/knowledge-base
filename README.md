@@ -4,6 +4,25 @@ Reusable patterns and lessons learned from vibe coding projects. Reference these
 
 ---
 
+## Browsing the KB visually
+
+[`kb-browser.html`](./kb-browser.html) is a static, self-contained UI over every lesson below — open it by double-clicking it, no server needed. It gives you:
+
+- **Facets** for `kind` (gotcha / pattern / howto / playbook / architecture / …) and for `stack` tags grouped into Languages, Frameworks & Libraries, Platforms & Runtimes, Cloud & Backend, Data & Sync, Auth & Security, Integrations, Reliability & Perf, and Process & Meta (unrecognized tags fall into "Other" rather than breaking anything).
+- **Multi-facet filtering** — selections within a group are OR'd (e.g. Rust *or* TypeScript), selections across groups are AND'd (e.g. Rust *and* Auth & Security).
+- **Full-text search**, a **staleness indicator** per the freshness rule below, and sort by recency/title/kind.
+- A **detail view** that renders the full lesson (headers, code blocks, tables, lists) via a small built-in markdown renderer.
+
+It's generated, not hand-written. After adding or editing a lesson, regenerate it:
+
+```
+python build-kb-browser.py
+```
+
+The generator (`build-kb-browser.py`) parses each lesson's frontmatter and pulls its one-liner from this README's Lessons list, then embeds the dataset as JSON into `kb-browser.template.html` to produce `kb-browser.html`. **Edit the template, not the generated file** — `kb-browser.html` gets overwritten every run.
+
+---
+
 ## Agent instructions — copying this into a new project
 
 > **If you are an AI agent (Claude Code or similar)** and the user has told you any of the following:
