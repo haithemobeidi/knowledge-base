@@ -1,7 +1,7 @@
 ---
 stack: [react, css, framer-motion, animation]
 kind: pattern
-last_verified: 2026-07-25
+last_verified: 2026-07-28
 ---
 
 # Shared-element "morph" transitions: a clip-path FLIP variant, and why mixing animation engines causes jutter
@@ -107,9 +107,48 @@ rAF-polling (bounded, e.g. 12 attempts ≈ 200ms) adapts to real mount latency �
 
 **Re-measure the LIVE source rect at reverse-transition time, not the rect captured at click time.** If the source element's position can change while the destination is open (grid reflow, filter/sort change, window resize), the reverse transition must re-query the source element's current position via a stable identifier (a `data-id` attribute), not reuse the stale rect from when the forward transition started — otherwise the reverse animation flies to where the element USED to be. If the source element is gone entirely (deleted, filtered out), skip the reverse transition and just fade — flying to empty space reads as a glitch, not a transition.
 
+## The trap inside "if the source is gone, skip the transition": detached is not absent
+
+The advice above — *if the source element is gone entirely, skip the reverse transition* — is right, and the obvious implementation of it is wrong:
+
+```ts
+const liveTile = container.querySelector(`[data-id="${id}"]`);
+if (!liveTile) { teardownWithoutTransition(); return; }   // looks sufficient. isn't.
+```
+
+That guard catches "the element was removed from a container that is still on screen." It does **not** catch "the container itself was unmounted," and the second case is the one that produces a spectacular visual bug.
+
+**Why the null check passes.** You captured `container` as a DOM reference when the transition started. When a framework unmounts a subtree it typically removes only the **outermost host node** of that subtree from the document — the descendants stay attached to that now-detached root (React's `commitDeletionEffects` calls `removeChild` once at the boundary rather than walking every grandchild). So your captured `container` is detached but structurally intact, and **`querySelector` traverses a detached subtree perfectly happily**. The lookup succeeds. You get back a real `HTMLElement`. Everything looks fine.
+
+**Why the result is a corner-flight.** Per CSSOM View, an element with no associated CSS layout box returns a zero `DOMRect` — and a detached element has no layout box. So `getBoundingClientRect()` returns `{x:0, y:0, width:0, height:0}`, and the reverse transition dutifully animates toward the viewport's top-left corner, shrinking to nothing.
+
+> **Signature to memorize: a transition flying to the top-left corner means a zeroed rect.** That's almost always a detached or `display:none` node, not a math error in your positioning code.
+
+**Two guards, at two different moments**, because they cover different windows:
+
+```ts
+// 1. At lookup — catches a container that was already unmounted.
+if (!liveTile || !liveTile.isConnected) { teardownWithoutTransition(); return; }
+
+// 2. At the instant the rect is committed to the flight — catches anything that
+//    unmounts DURING the close (an async re-query resolving, a sync from another
+//    device, a scroll-into-view preamble you awaited).
+const rect = measuredEl.getBoundingClientRect();
+if (!measuredEl.isConnected || rect.width === 0 || rect.height === 0) {
+  teardownWithoutTransition(); return;
+}
+```
+
+**Guard the element you actually MEASURE, not the one you looked up.** If you use a descendant marker to pick the rect (e.g. the tile carries `data-id` but you measure a `[data-morph-rect]` child so the flight lands on just the cover), then a connected *tile* does not prove a connected *cover*. Test the node whose rect you are about to trust.
+
+**Why this reads as intermittent, and why that's misleading.** Whether you hit it depends on whether the container survived, which depends on your data — a list that renders `null` when empty unmounts its whole section when you remove the **last** item, but only removes one child when you remove one of three. Same click, two different code paths, selected by how many items happened to be left. It gets filed as a race and hunted for weeks. It isn't a race; it's deterministic per-case. (A genuine race exists *too* — the removal landing mid-transition — but it is a different, rarer bug, and conflating them sends you looking for timing jitter that isn't there.)
+
+**The structural fix, if you own the list:** don't let the container unmount. A section that renders a collapsed header at zero items instead of returning `null` cannot produce a detached container at all. Keep the guards anyway — they're shared code protecting every other surface that *does* unmount.
+
 ## What NOT to do
 
 - Don't scale a rasterized image/text node between two very different sizes as your primary technique — the intermediate blur is visible on anything but tiny size deltas.
+- Don't treat `if (!element)` as "the element is gone." It only means *this lookup returned nothing*. A detached-but-intact subtree returns elements normally and measures as all zeros — check `isConnected` and a non-zero rect, on the node you actually measure.
 - Don't clip to either endpoint rect alone — always use the union bounding box, or content taller/wider than the smaller rect gets silently cut off.
 - Don't schedule a hand-off's two halves (reveal the real element / remove the ghost) for the same timestamp from two different mechanisms. Overlap them. Meeting exactly is a coin-flip between "invisible" and "one-frame hole."
 - Don't soften an invisible snap into a crossfade to make it "smoother" without checking what the snap was hiding — the snap is usually invisible *because* another layer still covers it at that instant.

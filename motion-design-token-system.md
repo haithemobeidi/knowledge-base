@@ -1,7 +1,7 @@
 ---
 stack: [react, css, framer-motion, tailwind]
 kind: pattern
-last_verified: 2026-07-21
+last_verified: 2026-07-28
 ---
 
 # A motion design-token system that reduced-motion actually reaches
@@ -138,8 +138,65 @@ html[data-motion-pref='off'] .mark[data-state='syncing'] .echo,
 
 Decorative loops (a glow pulse that rests neutral at 0%) can keep riding the blanket kill-switch — they freeze to a fine value. It's only the loops whose *meaning lives in the animated property* that need the explicit held state. Audit rule: for every `infinite` keyframe, ask "what does its 0% frame look like, and is that an acceptable static picture of this state?" If no, it needs a designed reduced-motion hold.
 
+## Part 3 — a preset name says WHAT, not WHICH DIRECTION
+
+Curves get chosen on entrances, where "soft settle" is easy to judge by eye. Then the same named preset gets reused on an exit, and it misbehaves in a way nobody can articulate.
+
+**The mechanism.** An easeOut-family curve spends most of its travel early. `ethereal: [0.22, 1, 0.36, 1]` is an easeOutQuint: roughly 80% of the way there in the first fifth of the duration. On an entrance that's the whole point — the thing arrives, then settles. On an **opacity 1→0 exit** it means the layer is essentially invisible a fifth of the way in, and then the remaining 80% of the duration is spent animating something nobody can see.
+
+Users report that as **two complaints that are actually one**: "it doesn't fade" (because the visible part was over in 80ms) *and* "there's a delay" (because the element isn't torn down until the 400ms transition ends). Both are the same curve.
+
+**But the obvious correction — "use a symmetric curve on exits" — is wrong half the time.** It depends on what the user is waiting for:
+
+| The exit is… | User is waiting for | Right curve | Why |
+|---|---|---|---|
+| The animation itself (dismissing something, nothing behind it competes) | the exit | symmetric, e.g. `suck: [0.4, 0, 0.6, 1]` | they're watching it leave; front-loading makes it a snap |
+| In the way (navigating to a destination already rendered behind it) | what's **behind** it | front-loaded, e.g. `ethereal` | the layer is an obstacle; travel that starts instantly keeps the motion coupled to the click |
+
+Measured on a 400ms opacity 1→0, the two curves differ enormously in the window that matters:
+
+| t | `ethereal` opacity | `suck` opacity |
+|---|---|---|
+| 50ms | 0.52 | 0.97 |
+| 100ms | 0.24 | 0.86 |
+| 200ms | 0.04 | 0.50 |
+
+`suck` stays above every visibility threshold **~150ms longer**. On a dismissal that's a pleasant fade. On a navigation it reads as *input latency* — a dead first beat where nothing appears to happen, then a mid-curve drop, reported as "harsher" and "I can still see the old screen."
+
+**Consequence for your token system:** if one flag drives several exits, it must carry **why**, not just whether.
+
+```ts
+// Not: fadeExit: boolean
+type FadeExit = null | 'navigating-away' | 'dismissed';
+const ease = fadeExit === 'dismissed' ? easings.suck : easings.ethereal;
+```
+
+One flag, one fade, several triggers — but the curve is chosen by intent. Adding a second boolean instead splits the source of truth and they drift.
+
+### Method: compute the curve, don't argue about feel
+
+Both of the calls above were settled in about a minute by evaluating the bezier rather than debating it. Worth keeping around:
+
+```js
+const bez = (p1, p2, t) => 3*(1-t)**2*t*p1 + 3*(1-t)*t*t*p2 + t**3;
+const solveT = (x1, x2, x) => {            // bisect for t given x
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 60; i++) {
+    const m = (lo + hi) / 2;
+    bez(x1, x2, m) < x ? (lo = m) : (hi = m);
+  }
+  return (lo + hi) / 2;
+};
+// progress at time-fraction x for cubic-bezier(x1,y1,x2,y2)
+const progress = ([x1, y1, x2, y2], x) => bez(y1, y2, solveT(x1, x2, x));
+```
+
+This matters beyond settling arguments: a user reporting "it feels laggy" is reporting something *physical*, and the curve either confirms it or doesn't. In the case above the user independently counted frames off a screen capture and their count matched the computed opacity table to within one frame. Treat feel complaints as measurable, because they are.
+
 ## What NOT to do
 
+- **Don't reuse an entrance curve on an exit without asking what the user is waiting for.** A decel curve is right when the exit *is* the animation and wrong when the user is waiting for whatever is behind it — same curve, opposite verdicts.
+- **Don't dismiss "it feels laggy" as subjective.** Evaluate the bezier at 3-4 timestamps; it takes a minute and it either confirms the report or rules it out.
 - **Don't assume CSS media-query coverage means you're done.** Test with your JS animation library's most commonly used component with the OS "reduce motion" setting on — if it still animates at full speed, you're missing the provider bridge.
 - **Don't use exactly `0ms` in a universal kill-switch** — use a near-zero value so `transitionend`/`animationend` still fire.
 - **Don't skip the "reduced" middle tier** if your users are diverse — accessibility guidance increasingly recognizes that "some motion, less of it" and "zero motion" are different needs, not the same request at different intensities.
