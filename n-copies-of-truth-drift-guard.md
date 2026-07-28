@@ -1,5 +1,5 @@
 ---
-stack: [any, local-first-sync, monorepo, codegen, zod]
+stack: [any, local-first-sync, monorepo, codegen, zod, deploy]
 kind: pattern
 last_verified: 2026-07-27
 ---
@@ -91,6 +91,46 @@ In the incident this comes from, the only thing that caught it was that the call
 
 Bootstrap fetches, "refresh" buttons, import/restore flows, admin backfill scripts, and cache-warming jobs are all in this category. They tend to be written early, when the table has five columns and carrying all of them is trivially easy, and they quietly become erasers as the table grows.
 
+## The deployed variant: the copy your drift-guard cannot see
+
+Build the script from the section below and you close the gap between the copies **in the repo**. There is one more copy, and it is the one that actually serves traffic: **the deployed artifact.** A checker that reads files on disk is structurally incapable of seeing it, so it reports green while production is broken.
+
+The shape (Playmoir, 2026-07-27): a column was added and the full lockstep walked — Postgres migration applied, sync rules deployed, client schema, write-through, both upsert paths, PATCH allowlist, and the server's `WRITABLE` registry. Every layer agreed. `check:sync-contract` passed. The commit was pushed. **The server was never redeployed.** The `WRITABLE` change existed in git and nowhere else.
+
+Why the blast radius was total rather than partial, and this is the part worth stealing:
+
+- CRUD-style sync engines capture a write's **full replicated column set**, not just the columns your statement touched. So one unknown column doesn't drop that column — it invalidates the entire row write.
+- The server validated with a **strict** schema (`.strict()` / `additionalProperties: false`), which is correct and is what you want. Combined with the above, it rejects the whole payload.
+- Upload queues drain **in order**. The rejected transaction never completes, so everything queued behind it is stuck too — including writes that have nothing to do with the new column.
+
+Net effect: a single missing column on one deployed file presented to the user as *"all backup is broken, and Retry doesn't help."* Retry cannot help, because the payload is permanently invalid against the deployed schema; it isn't a transient fault, so retrying forever is the correct behavior and also useless.
+
+**The tell in the record:** every previous server change's log entry said "server deployed + verified." The one that broke it said only "pushed." If your handoff notes distinguish those two words, the diff between them is a deploy you owe.
+
+Three defenses, in order of leverage:
+
+1. **Expose the deployed version.** A `/version` endpoint returning the commit SHA turns "is prod current?" from an act of memory into one HTTP request — and lets the drift-guard compare it to `HEAD` for the server directory.
+2. **Fail the check when the server dir has commits newer than the last recorded deploy.** Cheap, no infrastructure, catches exactly this.
+3. **At minimum, name the step.** If "deploy the server" is implied rather than written in the lockstep checklist, it will be skipped by whoever is tired.
+
+> The generalized rule: **a contract test that only reads the repo is testing agreement, not reality.** Agreement between copies you can see says nothing about the copy you can't.
+
+## The write-side variant: writing to the copy that loses
+
+The variants above are about *reads* — a field that doesn't arrive, or arrives and erases. There's a write-side twin: **in a system where one copy is authoritative, a write to a non-authoritative copy is temporary, and it un-does itself later and somewhere else.**
+
+Concretely (same project, same day): a dev tool backdated some timestamps by writing straight to local SQLite with raw SQL. It worked — the UI updated, the feature became testable. Then, minutes later and after an unrelated user action, the rows reverted. The mirror layer was **one-way, cloud → local**: it exists to write server-delivered rows into the local DB, and its own header said it does not push. So the local edit was never propagated, and the next time the server re-delivered those rows the original values came back.
+
+What makes this expensive to diagnose:
+
+- **It fails at a distance.** The bug surfaces after an unrelated action (anything that triggers a sync), so the write and the failure aren't adjacent in time or in the user's mental model. The reported symptom was "I clicked X and unrelated thing Y broke."
+- **It looks like a reactivity bug.** Data that was on screen and then isn't reads as a stale-cache or re-render problem. It is worth checking whether the surface *re-queried* — if a full remount still shows the old state, the data genuinely changed and the UI is innocent. That single check redirects the whole investigation.
+- **Dev and seed tooling is where it bites**, because that's the code most likely to reach for raw SQL and least likely to go through the app's write helpers. It's also the code nobody reviews.
+
+The rule: **any write path must go through whatever keeps the copies in lockstep, including throwaway tooling.** If your `setThing()` helper writes local *and* mirrors, then a debug tool that writes only local isn't a shortcut, it's a different and broken operation. Put the dev-only function next to the real write functions so it inherits the same lockstep by proximity — not in the debug screen where it will be written as raw SQL.
+
+A corollary worth checking before you mirror: **confirm the field is even writable from the client.** Server-authoritative columns are often absent from the write allowlist, so mirroring them silently no-ops and you get the same revert with an extra layer of confusion. Prefer changing a field you *are* allowed to write to achieve the same test condition.
+
 ## The fix: a script, not a reminder
 
 > "The drift-guard is a tiny script that reads all five copies and yells if they disagree. Users never see it — it's a test that runs when we build."
@@ -123,3 +163,6 @@ Build the drift-guard **before** any piece of work that has to touch every layer
 
 - [`monorepo-stale-dist-zod-strip.md`](./monorepo-stale-dist-zod-strip.md) — the detailed postmortem of incident #1 above; that doc's "structural fixes" section is what this lesson generalizes into a standalone pattern.
 - [`powersync-steam-backend-architecture.md`](./powersync-steam-backend-architecture.md) — the 6-layer architecture this pattern was extracted from.
+- [`write-triggered-enforcement-blind-to-deletion.md`](./write-triggered-enforcement-blind-to-deletion.md) — the same blindness in a different axis: an enforcement mechanism that structurally cannot observe a whole class of change. "Deployed copy" and "deleted file" are two things an in-repo checker never sees.
+- [`instrument-before-patching.md`](./instrument-before-patching.md) — both variants added here were diagnosed by finding the layer that could report the truth (a deployed-schema rejection, a one-way mirror's own header comment) rather than by guessing at fixes.
+- [`local-sqlite-app-wide-change-signal.md`](./local-sqlite-app-wide-change-signal.md) — relevant to the write-side variant's red herring: when data vanishes after a navigation, check whether the surface actually re-queried before blaming reactivity.
