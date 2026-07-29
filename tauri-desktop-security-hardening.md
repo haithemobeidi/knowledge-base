@@ -48,6 +48,8 @@ tauri-plugin-sql exposes raw SQL to JS by design (the frontend owns DB writes) �
 ## 8. Secrets on disk
 Tokens/keys written to the local DB or files should be wrapped with the OS facility — Windows **DPAPI** (`CryptProtectData`), macOS Keychain, Linux libsecret — not stored plaintext.
 
+The **updater signing key** deserves its own line: passphrase-less at `~/.tauri/<app>.key` (the default) means anything that can read one file can ship signed code to every install, and the naive fix — regenerate with a password — **strands every existing install** because the pubkey is compiled into shipped binaries. Same-keypair rekey procedure + verification pattern: [`tauri-updater-key-passphrase-without-stranding.md`](./tauri-updater-key-passphrase-without-stranding.md) (added 2026-07-29).
+
 ## Verify
 `cargo check` in **both** debug and release after `#[cfg]`-gating — the release build is what proves the gated symbols and their handler entries stay consistent (a mismatch only errors in one profile).
 
