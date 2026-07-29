@@ -1,7 +1,7 @@
 ---
 stack: [react, css, framer-motion, animation]
 kind: pattern
-last_verified: 2026-07-28
+last_verified: 2026-07-29
 ---
 
 # Shared-element "morph" transitions: a clip-path FLIP variant, and why mixing animation engines causes jutter
@@ -145,6 +145,38 @@ if (!measuredEl.isConnected || rect.width === 0 || rect.height === 0) {
 
 **The structural fix, if you own the list:** don't let the container unmount. A section that renders a collapsed header at zero items instead of returning `null` cannot produce a detached container at all. Keep the guards anyway — they're shared code protecting every other surface that *does* unmount.
 
+## Scoping the lookup and "render nothing when empty" are mutually exclusive
+
+A follow-on that only appears once you fix a *different* bug, and it is worth knowing before you fix that one.
+
+**The other bug first.** A reverse flight has to find the element it should fly back to, usually `container.querySelector('[data-id="..."]')`. If `container` is resolved with `closest('[data-morph-container]')` and the nearest such ancestor is the whole screen root, that lookup spans **every** surface on the page — so the flight lands on the first document-order match, which is the wrong card as soon as two surfaces render the same item. The fix is one attribute: give each list its own `data-morph-container` so the lookup is scoped to the list you actually clicked in.
+
+**What that attribute does to a list that unmounts when empty.** Before, an item card's `closest()` walked up to a screen-root container that never unmounts, so the detached-container bug above was *dormant* — the container outlived any list. The moment the list carries its own container attribute, an `if (!items.length) return null` becomes exactly the detached-container case: click the last item, the list empties, the `<ul>` unmounts, the flight measures a detached node, and the rect comes back zeroed.
+
+So the two changes are individually correct and **jointly required**. Shipping the scoping attribute without making the list permanent trades a wrong-target bug for a zeroed-rect bug. Land them in the same commit.
+
+**And "make the section permanent" is not enough.** The node that must stay mounted is *the one carrying the attribute*, not its parent. This is wrong:
+
+```jsx
+<section>                                  {/* permanent — but not the container */}
+  {items.length > 0
+    ? <ul data-morph-container>{cards}</ul> {/* still unmounts */}
+    : <EmptyState />}
+</section>
+```
+
+The section survives, the `<ul>` doesn't, and the container detaches exactly as before. One list has to render always and swap its *children*:
+
+```jsx
+<section>
+  <ul data-morph-container>
+    {isEmpty ? ghostPlaceholders : cards}
+  </ul>
+</section>
+```
+
+There's a layout dividend for free: placeholders that hold the real grid's dimensions mean the first real item arriving moves nothing on the page, so you also stop the empty→populated transition from shoving content around.
+
 ## What NOT to do
 
 - Don't scale a rasterized image/text node between two very different sizes as your primary technique — the intermediate blur is visible on anything but tiny size deltas.
@@ -152,4 +184,6 @@ if (!measuredEl.isConnected || rect.width === 0 || rect.height === 0) {
 - Don't clip to either endpoint rect alone — always use the union bounding box, or content taller/wider than the smaller rect gets silently cut off.
 - Don't schedule a hand-off's two halves (reveal the real element / remove the ghost) for the same timestamp from two different mechanisms. Overlap them. Meeting exactly is a coin-flip between "invisible" and "one-frame hole."
 - Don't soften an invisible snap into a crossfade to make it "smoother" without checking what the snap was hiding — the snap is usually invisible *because* another layer still covers it at that instant.
+- Don't add a per-list `data-morph-container` scope without also making that list permanent — the scope is what turns a dormant early-return-when-empty into a live detached-container bug, so the two fixes are jointly required, not independently optional.
+- Don't assume making the *section* permanent is enough. The node carrying the container attribute is the one that must never unmount; if the `<ul>` inside a permanent `<section>` still swaps out at zero items, nothing is fixed.
 - Don't assume "same animation library, same `animate()` call" means "same execution thread" for every property you're animating together. Verify the properties that must stay in lockstep are actually on the same thread; if one drifts, suspect a per-property engine fallback.
