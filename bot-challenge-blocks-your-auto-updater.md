@@ -6,7 +6,7 @@ last_verified: 2026-07-29
 
 # Your CDN's bot challenge blocks library user-agents, and an auto-updater is a library user-agent
 
-**One-liner:** put your update manifest behind Cloudflare (or any WAF with bot management) and the endpoint will serve browsers perfectly while 403-ing `reqwest`, `python-requests`, curl's default and empty user-agents — so your auto-updater can be dead for every user while the download page works fine, and because updater check-failures are deliberately silent, nobody will ever report it. Worse, the two obvious ways to test it both give you the wrong answer.
+**One-liner:** put your update manifest behind Cloudflare (or any WAF with bot management) and the endpoint will serve browsers perfectly while 403-ing `reqwest`, `python-requests`, curl's default and empty user-agents — so your auto-updater can be dead for every user while the download page works fine, and because updater check-failures are deliberately silent, nobody will ever report it. Worse, the classifier reads your TLS/HTTP fingerprint as well as your user-agent, so curl and Node's fetch sending the IDENTICAL updater UA get 200 and 403 respectively — meaning no client your build script can call is able to prove OTA works, and every obvious way to test it gives you a confidently wrong answer.
 
 ## The setup that produces it
 
@@ -55,7 +55,28 @@ curl -s -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/140.0" \
 
 Conclusion you'll draw: **the endpoint is fine, curl was just being weird.** Also wrong. You've now proven browsers work, which was never in question.
 
-Neither test touched the thing you actually ship. The only test that means anything uses **the exact UA string your client sends**.
+Neither test touched the thing you actually ship. So the obvious correction is "test with the exact UA string my client sends" — and that is better, but it is **still not sufficient**, for a reason worth its own section.
+
+## The UA is not the whole classifier — and this invalidates the fix you just reached for
+
+Measured on the same live endpoint, same day, sending the **identical** `tauri-plugin-updater/2.10.1` user-agent:
+
+| Client | Result |
+|---|---|
+| curl | **200** |
+| Node `fetch` (undici) | **403** |
+
+Same header, opposite outcomes. And Node's fetch is challenged **even when it sends a full Chrome user-agent**. So the WAF is fingerprinting the client's TLS handshake and HTTP/2 behaviour (JA3/JA4-style), not just reading a header.
+
+The consequence is uncomfortable and worth stating plainly: **no HTTP client available to your build script can faithfully impersonate the one inside your app.** curl passing proves curl passes. Node failing proves Node fails. Neither is `reqwest`-in-Tauri.
+
+Which means:
+
+- A script-based "OTA works" check is **not achievable**. You can verify the artifact is published, correct and reachable; you cannot verify your updater can read it.
+- If you build that check anyway and call it verification, you've built the same trap as the guard that watches the wrong path — a green signal that means less than it claims.
+- **The only conclusive test is behavioural:** install an older build and confirm it offers the update.
+
+This is also why the fix below is "exempt the path," not "allowlist the UA." An exemption is a property of the endpoint and holds for every client. A UA allowlist still leaves you at the mercy of a fingerprint you don't control and can't test.
 
 ## Find the real user-agent, don't guess it
 
@@ -81,7 +102,7 @@ curl -s  -A "$UA" -o /dev/null -w "manifest %{http_code}\n" https://releases.exa
 curl -sI -A "$UA"                -w "artifact %{http_code}\n" https://releases.example.com/App_1.2.3.msi
 ```
 
-Measured on a live Cloudflare zone with default bot settings (2026-07-29):
+Measured on a live Cloudflare zone with default bot settings (2026-07-29), **all via curl** — remember from the section above that a different client sending these same strings can get different answers, so read this as "which UAs curl gets away with," not as your app's fate:
 
 | User-Agent | Result |
 |---|---|
@@ -109,10 +130,10 @@ That is not a design decision anyone made on your behalf. It is a coincidence yo
 
 ## What to actually do
 
-1. **Test with the shipped UA in CI, not by hand.** One curl per release, asserting `200` on both manifest and artifact. It's a two-line check that catches a silent total failure.
-2. **Exempt the release path explicitly** rather than relying on a lucky UA — a WAF skip rule or Bot Management exception scoped to `releases.example.com/*`. These are static public artifacts; there is nothing to protect, and the download link is public anyway.
-3. **If you must pass by UA, pin it.** Set an explicit user-agent you control (`MyApp-Updater/1.2.3`) so a dependency bump can't change it underneath you, and allowlist that string.
-4. **Log update-check failures somewhere you'll see them**, even while staying silent in the UI. Silent-to-the-user should not mean silent-to-you — a counter in your error reporter turns a permanently invisible bug into a graph that goes flat.
+1. **Exempt the release path.** A WAF / Bot Management skip rule scoped to `releases.example.com/*`. This is the only fix that is a property of the *endpoint* rather than of a client you can't test, and it's the one that makes every other check meaningful. These are static public artifacts; the download link is public anyway, so there is nothing being protected.
+2. **Log update-check failures somewhere you'll see them**, even while staying silent in the UI. Silent-to-the-user must not mean silent-to-you — a counter in your error reporter turns a permanently invisible bug into a graph that goes flat. Given you cannot test the client from a script, this is your real detector.
+3. **Assert what you actually can at release time:** that the manifest is published, parses, names the version you just shipped, and points at an artifact that returns 200. Useful, and *not* the same claim as "the updater can read it" — label it accordingly so a green run doesn't get quoted as proof later.
+4. **If you can't get an exemption, pin the UA** (`MyApp-Updater/1.2.3`) so at least a dependency bump can't change it underneath you — while remembering the fingerprint half is still outside your control.
 
 ## Generalises beyond updaters
 
