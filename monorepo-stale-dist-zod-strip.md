@@ -1,7 +1,7 @@
 ---
 stack: [pnpm-monorepo, zod, vite, tauri, powersync]
 kind: postmortem-playbook
-last_verified: 2026-07-20
+last_verified: 2026-07-31
 ---
 
 # Stale workspace `dist/` + Zod strip = data that vanishes with zero errors — and the stacked-bug post-mortem that found it
@@ -133,3 +133,27 @@ worked extremely well:
 - "Fix applied" ≠ "fix confirmed": our final server remedy WAS correct, but was
   verified only minutes after applying, before the client could sync — logging
   it as failed. Give propagation time a seat in the verdict.
+
+## A third stale layer: Vite's dep-optimizer cache (added 2026-07-31)
+
+A recurrence of this article's family, one layer up. Workspace packages that
+resolve like node_modules dependencies (`"main": "./dist/index.js"`) get
+**pre-bundled by Vite's dep optimizer and cached in `node_modules/.vite`** —
+and that cache survives dev-server restarts AND dist rebuilds. Symptom
+observed live: a schema field was renamed, `dist/` on disk was verifiably
+correct (grep found only the new name), the app was fully restarted — and the
+runtime still validated against the OLD field name, throwing Required errors
+with the old spelling in the ZodError path.
+
+So the staleness checklist for "git says current but runtime disagrees" is now
+three layers deep:
+
+1. **`dist/` vs `src/`** — the original trap above (rebuild the package).
+2. **Vite dep-optimizer cache** — `rm -rf <consumer>/node_modules/.vite` (or
+   start Vite with `--force`). A dist rebuild does NOT invalidate it.
+3. **The running process** — a reload/restart only helps after 1 and 2 are
+   actually clean.
+
+Diagnostic that pins layer 2: the error message contains an identifier that no
+longer exists anywhere in `src/` OR `dist/` — the only place it can live is a
+cached bundle.
