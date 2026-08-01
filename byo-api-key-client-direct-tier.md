@@ -1,7 +1,7 @@
 ---
 stack: [tauri, desktop, rust, api-integration, monetization]
 kind: pattern
-last_verified: 2026-07-20
+last_verified: 2026-08-01
 ---
 
 # BYO API key as a free tier: call the third-party API from native code, never from webview JS
@@ -25,6 +25,18 @@ The natural bug: BYO key unlocks feature X, so it gets OR'd into a general "is t
 
 Model tiers *within* a capability precisely, too: distinguish "some free generations via a trial counter" from "unlimited via subscription OR BYO key" as two different predicates. A trial-limited state can't actually complete a bulk operation (a full-history backfill) the way unlimited access can — reusing the wrong predicate for a bulk operation silently strands the user partway through with no explanation.
 
+### Getting the predicates right is only half of it — audit the OFFERS too
+
+Named per-capability predicates fix *who can do the thing*. They do nothing about **who gets told the thing exists**, and those are separate code paths that drift apart silently.
+
+The failure (Playmoir, 2026-08-01): the bulk-backfill capability was correctly gated on `hasUnlimitedAi()` (subscription **or** BYO key). But the modal that *offers* the backfill — the "you're in, want to catch up your history?" moment — fired on a `isSubscribed()` false→true edge, because it was written when subscription was the only way to get there. Net result: a BYO-key user had the capability the entire time and was **never told**. Nothing was broken, nothing threw, and the feature was reachable if you went looking in settings. It was simply invisible to a whole tier of users, indefinitely.
+
+This is structurally invisible for a reason: the capability check and the discovery check are usually **far apart in the codebase** (a settings card vs. an app-root modal), written months apart, and neither is wrong on its own terms. A test that asks "can a BYO user run a backfill?" passes.
+
+The audit that catches it: for each capability predicate, grep every reference and **sort the call sites into two piles — gates and offers** (banners, nudges, upgrade modals, empty-state CTAs, notification rows, onboarding steps). Every offer for capability X must use the *same predicate* as the gate for X, or be able to say why not in one sentence. Where an offer fires on a **transition** rather than a state, the predicate in the edge-detector is the one that matters — and it's the easiest to overlook, because it often sits inside a `useEffect` rather than next to any UI.
+
+One migration trap when you fix one: an offer that fires on an edge usually persists an "already shown this" flag, baselined from the *old* predicate. Widening the predicate makes previously-ineligible users read as a fresh conversion, so the offer fires once for everyone who was silently excluded. That is usually the correct outcome — it's the offer they should have had — but decide it deliberately and say so in the release notes, rather than being surprised by a support ticket.
+
 ## Reuse the SAME server-side persistence path regardless of which route fetched the data
 Client-direct doesn't have to mean client-only. Fetch the source data via the free/native path, then hand the *result* to the exact same downstream write logic the paid/server-key path already uses (extract it into one shared function if it wasn't already). Don't duplicate the persistence/multi-device-sync implementation per source — fork only the narrow "how did we obtain this data" step, converge everything after that onto one path.
 
@@ -36,6 +48,8 @@ A free BYO key usually has the vendor's own free-tier rate limit, materially tig
 
 ## Cross-language prompt/logic duplication is an accepted cost — guard it with pointer comments, not tooling
 When "client-direct" crosses a LANGUAGE boundary (native Rust calling an LLM directly vs. your JS server doing the same), there's no shared-source mechanism available — unlike same-language duplication, which should get an automated drift-guard script (see `n-copies-of-truth-drift-guard.md`). Port the prompt/logic **verbatim** and accept the duplication deliberately, but leave an explicit pointer comment at **both** copies naming the sibling file and stating "keep in sync." This is weaker than a script — nothing fails a build if they drift — but it's the correct minimum for a boundary a script genuinely can't reach cheaply. Record the acceptance as a locked decision, not an open TODO, so a later DRY audit doesn't flag it as an unaddressed finding.
+
+**The pointer comments are necessary and still not sufficient, and this bit us.** They keep the copies matching *in the repo*. They say nothing about whether both copies are **live** — and a cross-language pair almost by definition ships through two different release mechanics (the native copy compiles into the app binary, the server copy needs a deploy). Patch both in one commit, follow the practice exactly, and production can still run one old copy for as long as nobody deploys. Worse, the split usually follows the entitlement fork described above, so the stale copy only affects *one tier* — and whichever tier your dev account is on decides whether you ever see it. See the "lockstep sub-variant" in [`n-copies-of-truth-drift-guard.md`](./n-copies-of-truth-drift-guard.md) for the incident and the timestamp check that catches it.
 
 ## Related
 - [`n-copies-of-truth-drift-guard.md`](./n-copies-of-truth-drift-guard.md) — the general "must stay in lockstep" problem; this lesson's cross-language duplication is the one case where the guard-script fix isn't available and a documented exception is the right call.

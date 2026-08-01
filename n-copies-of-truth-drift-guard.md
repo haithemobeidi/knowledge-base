@@ -1,7 +1,7 @@
 ---
 stack: [any, local-first-sync, monorepo, codegen, zod, deploy]
 kind: pattern
-last_verified: 2026-07-27
+last_verified: 2026-08-01
 ---
 
 # N copies of one schema must agree — build the drift-guard, don't rely on discipline
@@ -114,6 +114,26 @@ Three defenses, in order of leverage:
 3. **At minimum, name the step.** If "deploy the server" is implied rather than written in the lockstep checklist, it will be skipped by whoever is tired.
 
 > The generalized rule: **a contract test that only reads the repo is testing agreement, not reality.** Agreement between copies you can see says nothing about the copy you can't.
+
+### The lockstep sub-variant: one commit, two release mechanics
+
+The section above is about a deploy someone *forgot*. This one is worse, because nobody forgot anything and the discipline was followed exactly.
+
+The setup: the same logic lives in two languages — a prompt, a validation rule, a pricing table — because the two call sites are a native client and a server (see `byo-api-key-client-direct-tier.md` for why that duplication is sometimes correct). The accepted practice is to patch **both copies in lockstep, in one commit**. Do that and the copies are byte-correct and provably synchronised in git.
+
+They are still not synchronised in production, because **the two copies ship through different release mechanics.** The native copy is compiled into the app binary and reaches users when they update. The server copy reaches users when someone runs `deploy`. One commit, two cadences, no signal anywhere that half of it is still on the shelf.
+
+Playmoir, 2026-08-01: a prompt gained entity-tagging instructions; both copies were patched together and the commit landed at 03:52. The last server release had gone out at ~01:45 — **two hours before the commit existed.** Every generation for the next twelve hours ran the old prompt. `pnpm check` passed, the cross-layer contract check passed, the pre-push hook passed. Nothing was wrong with the code.
+
+Two things make this specifically hard to notice:
+
+- **The commit is the alibi.** "Both copies patched in lockstep" is what you'd write in the message, and it's true. Someone auditing later reads the diff, sees both files changed together, and concludes the surface is consistent — which it is, in the only place they're looking.
+- **It splits your users by tier, so testing on the wrong account shows nothing.** The routing fork (native-direct vs. via-your-server) usually maps to an entitlement: bring-your-own-key users take the native path, subscribers take the server path. So the fix was live *immediately* for BYO users and *not at all* for subscribers. Whoever tests decides whether the bug exists. Here the dev account had no personal key, which is the only reason it surfaced at all.
+
+**The mechanical tell, and it's better than reading handoff notes:** compare the deployment's timestamp to the commit's. `fly releases -a <app>` (or your platform's equivalent) against `git log -1 --format=%cd -- <server-dir>`. If the newest release predates the newest commit touching that directory, the deployed copy is stale — one command, no memory involved, and it answers the question for *every* duplicated-logic pair at once rather than per-feature.
+
+**Don't debug the display layer first.** The natural first move when tagged output doesn't render is to suspect the renderer. Query the datastore instead and look at what was actually *written* — if the stored values have no tags in them, the problem is upstream of every line of UI code, and you've skipped the entire front-end investigation. In this incident that was one read-only query against a copy of the local DB, and it turned a display bug into a deploy bug in about a minute.
+
 
 ## The write-side variant: writing to the copy that loses
 
