@@ -143,3 +143,4 @@ Anything non-browser fetching from a WAF-protected origin has this shape: crash-
 
 - [signed-but-flagged-download-reputation.md](./signed-but-flagged-download-reputation.md) — the sibling problem on the same artifact: it's signed, it's clean, and SmartScreen warns anyway.
 - [instrument-before-patching.md](./instrument-before-patching.md) — the discipline that turns "OTA seems broken?" into a measured table instead of a guess.
+- [verify-the-artifact-your-user-receives.md](./verify-the-artifact-your-user-receives.md) — how to sidestep this challenge entirely when a human is in the loop: if they download from the real link and scan *that*, matching its digest against your local build proves the served bytes without any programmatic fetch of the CDN.

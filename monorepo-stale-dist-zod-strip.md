@@ -157,3 +157,7 @@ three layers deep:
 Diagnostic that pins layer 2: the error message contains an identifier that no
 longer exists anywhere in `src/` OR `dist/` — the only place it can live is a
 cached bundle.
+
+## Related
+
+- [verify-the-artifact-your-user-receives.md](./verify-the-artifact-your-user-receives.md) — the same stale-artifact trap one boundary further out: `dist/` holding the *previous* release's content-hashed assets, so a bare `deploy dist` publishes the old build while every source-file check reads green. Same tell (git says current, the artifact isn't), same fix (the deploy command begins with the build command).
