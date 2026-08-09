@@ -63,3 +63,5 @@ That reasoning is defensible, cheap, testable against your own code, and — imp
 ## Related
 
 - [[instrument-before-patching]] — the same instinct applied to debugging: get the real measurement before acting on the plausible story.
+- [[resolve-versions-from-the-registry-not-a-search-index]] — the same rule for a mechanical fact rather than a research one: a search index is a cache, the registry's metadata endpoint is the primary source, and a stale-but-valid version pin reads as deliberate forever.
+- [[subset-bundled-fonts]] — a number that became a code comment without anyone measuring it, and what the measurement actually said.

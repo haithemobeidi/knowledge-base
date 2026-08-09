@@ -1,7 +1,7 @@
 ---
-stack: [any, verification, http, spa, debugging, process]
+stack: [any, verification, testing, http, spa, debugging, process]
 kind: gotcha
-last_verified: 2026-08-08
+last_verified: 2026-08-09
 ---
 
 # A 200 is not an existence check — run the negative control before trusting any probe
@@ -61,6 +61,44 @@ Two outcomes, both valuable:
 - **Boolean pipelines in shell.** `curl ... | grep -q X && echo present || echo missing` collapses *three* states (present / absent / fetch failed) into two, and assigns the failure to "missing." Prefer downloading to a file, asserting the size, then grepping the file.
 - **"Is my deploy live?"** The old asset is often still served for a short window. A check run immediately after deploy tests the *previous* deployment and reads as a routing fault. Control: confirm the response carries something unique to the new build, and re-check after a delay before concluding anything.
 
+## The same disease in your test suite: the vacuous assertion
+
+A probe that cannot return red has a twin that is easier to write and harder to spot: **an assertion over a collection that turned out to be empty.**
+
+Every test of the form *"no element of S violates P"* passes when `S` is empty. Not by accident of the framework — that is what "for all" means. So the assertion is only doing work if `S` is non-empty, and **the size of `S` is part of what must be asserted.**
+
+Measured instance. A guard was written to prove no framework-default colour had leaked into an app's theme. It enumerated the theme's colour slots by reflection, filtered method names on a language-specific mangling suffix (Kotlin appends a hash like `-0d7_KjU` to getters returning an inline value class), and asserted that none of them matched the framework's baseline:
+
+```kotlin
+val inherited = ours.filter { (name, value) -> baseline[name] == value }.keys
+assertTrue("still inherited: $inherited", inherited.isEmpty())   // PASSED
+```
+
+The suffix did not match at runtime. The filter returned **zero slots**. `emptySet().isEmpty()` is true, so the test passed — green, fast, and examining nothing. It was caught only because a second test had been written alongside it:
+
+```kotlin
+@Test fun `the reflection actually finds the slots`() {
+    val found = slots(AppColors)
+    assertTrue("found only ${found.size} — the filter has broken: ${found.keys}", found.size >= 40)
+    assertTrue(found.containsKey("primary"))
+}
+```
+
+That is the negative control, in test form. The fix to the guard itself was also the same lesson one level down — stop keying off an incidental naming detail and key off something contractual (the getter's return type), so a re-mangling cannot silently empty the set again.
+
+**Where empty-set vacuity hides:**
+
+- **Reflection and annotation scanning** — a package filter, a name pattern, a classpath scan that finds nothing.
+- **Linters and formatters with a glob** — `lint 'src/**/*.ts'` on a repo that moved to `app/` reports zero problems, forever, cheerfully.
+- **Parameterised tests** whose data provider returns an empty list. Most runners report this as passing, not skipped.
+- **`grep`-based CI gates** — "assert the forbidden string does not appear" passes when the file path is wrong.
+- **Migrations and bulk updates** — `UPDATE … WHERE …` matching zero rows is a success exit code.
+- **Contract tests that parse another repo's source** to derive expectations: if the anchor text moves, the extracted set is empty and both sides "agree."
+
+**The habit, stated once:** any check whose success condition is *the absence of something* must be paired with proof that it was looking at something. Assert the count, assert one known-present member, or deliberately break the thing and watch it go red before you trust it green.
+
+That last one is the cheapest and most under-used version: **make the test fail on purpose, once.** Rename a colour, add a forbidden string, point at a file you know is bad. A test you have never seen fail is a test you have never seen work.
+
 ## When the probe cannot be made honest
 
 Sometimes the endpoint that *would* answer truthfully is unavailable to you. In the case this came from, the JSON backend behind the SPA returns the real answer — and is gated by reCAPTCHA:
@@ -83,3 +121,8 @@ It is also the verification-side twin of [instrument-before-patching.md](./instr
 ## The one-line version
 
 **An instrument that cannot fail is not measuring anything.** Prove it can fail, then believe it.
+
+## Related
+
+- [[compose-invisible-text-localcontentcolor]] — where the vacuous-assertion case above came from, and the framework-default bug the broken guard was written to catch.
+- [[resolve-versions-from-the-registry-not-a-search-index]] — same family, different instrument: the endpoint that answered you was not the one that knows.
