@@ -118,5 +118,6 @@ The habit: when a default surprises you, **read the artifact you compile against
 ## Related
 
 - [[negative-control-before-trusting-a-probe]] — the guard test above is only a guard if it can fail; an empty set satisfies every "none of these are wrong" assertion.
+- [[edge-to-edge-scrim-paints-over-your-bleed]] — the same family's other member: there the paint was a system-bar scrim over a bleed; both were debugged as structure while every structural probe answered "correct."
 - [[material-tier-glassmorphism-tokens]] — the translucent-surface token system this theme sits on top of.
 - [[webview2-react-render-traps]] — the same genre one platform over: framework defaults that behave differently than the environment you developed against.

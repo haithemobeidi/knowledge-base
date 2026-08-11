@@ -1,7 +1,7 @@
 ---
-stack: [steam, rust, vdf, game-library-integration]
+stack: [steam, rust, vdf, game-library-integration, cdn]
 kind: reference
-last_verified: 2026-07-20
+last_verified: 2026-08-11
 ---
 
 # Steam library integration — cover art, install-state, and the ToS constraint that shapes the whole architecture
@@ -66,6 +66,22 @@ The pattern other Steam-integrated tools (Playnite, GOG Galaxy 2.0) and this pro
 3. **User brings their own Steam Web API key** (self-service, free, instant at Steam's key page) for anything that needs the full owned-games list beyond what's locally installed — each user consumes their OWN 100k/day budget, so the product's scale is no longer bounded by a shared key. Store the user's key via the OS keychain/DPAPI, not plaintext.
 
 If you're scoping a new Steam-integrated feature, decide up front which of these three tiers it actually needs — most "show the user's library" features only need tier 1, and reaching for tier 3 (asking the user for their own API key) should be reserved for features that genuinely need data local scanning can't provide (full owned-games list including uninstalled-and-never-locally-seen games, playtime history, etc.).
+
+## 6. The web CDN is NOT the librarycache — Steam runs two disjoint asset pipelines
+
+Section 1's layout B (nested content-hash directories) is not just a directory shape you walk: **those hashes are the only key to assets that exist nowhere else on the public web.** Steam serves game art through two pipelines, and neither is a superset of the other:
+
+- **The store pipeline** — flat, guessable URLs (`cdn.cloudflare.steamstatic.com/steam/apps/{appid}/logo.png`, `library_hero.jpg`, …) plus `IStoreBrowseService/GetItems` with `include_assets`, which returns hash-named *store* assets (capsules, heroes, header). **GetItems never returns a `logo` entry — for any game.**
+- **The library pipeline** — hash-addressed URLs of the shape `shared.steamstatic.com/store_item_assets/steam/apps/{appid}/{hash}/logo.png`. Publicly served (200, no auth), but the hashes come from appinfo, i.e. from the Steam **client** — no public web API exposes them. The client materialises them on disk as layout B: `librarycache/{appid}/{hash}/logo.png`.
+
+Measured on a real 728-game library (2026-08-10): 86 games have no flat `logo.png`; **21 of those have a logo that exists only in the library pipeline** (new titles are the common case), which the Steam client renders happily while every web-side probe swears no logo exists. The remaining 65 genuinely have no logo asset anywhere — for those, a text fallback is *correct* and Steam's own client shows text too.
+
+**The workable fix for a companion device (phone/web) that can't read librarycache:** harvest the hashes from a machine that can — one pass over `librarycache/*/*/logo.png` yields `{appid → hash}` — and mirror them through your own backend as a column the companion client reads. Two properties make this better than it sounds:
+
+- **Hash-addressed URLs are content-addressed, so they can never go stale.** The flat URLs can and do: a publisher rebrand replaces `logo.png` in place, and any client that cached the old bytes (image loaders default to serve-from-disk-without-revalidation) shows yesterday's logo indefinitely. A rebrand changes the *hash*, so a hash URL either serves the right bytes or 404s into your fallback chain. Prefer the hashed rung FIRST when you know the hash, flat as fallback.
+- The harvest decays as the library grows — new purchases have no hash until the harvesting machine re-runs. Make the desktop client maintain the column as part of its normal library sync, not a hand-run script.
+
+The epistemics of how this was almost missed — a unanimous two-source census concluding "no logo exists" for logos the desktop was visibly rendering — is written up in [[negative-control-before-trusting-a-probe]] (believed negatives need a positive control). The mechanics live here; don't duplicate the story there.
 
 ## Related, adjacent domain (save-file locations, not cover art)
 

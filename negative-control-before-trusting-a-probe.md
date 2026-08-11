@@ -1,7 +1,7 @@
 ---
 stack: [any, verification, testing, http, spa, debugging, process]
 kind: gotcha
-last_verified: 2026-08-09
+last_verified: 2026-08-11
 ---
 
 # A 200 is not an existence check — run the negative control before trusting any probe
@@ -99,6 +99,19 @@ That is the negative control, in test form. The fix to the guard itself was also
 
 That last one is the cheapest and most under-used version: **make the test fail on purpose, once.** Rename a colour, add a forbidden string, point at a file you know is bad. A test you have never seen fail is a test you have never seen work.
 
+## The mirror image: a believed NEGATIVE needs a POSITIVE control
+
+Everything above guards believed *positives* — the probe said yes, prove it could have said no. The census case is the mirror, and it bites harder because agreement between probes feels like corroboration.
+
+Live example (2026-08-10): a census of 728 Steam games probed the flat CDN for each game's `logo.png` and cross-checked every miss against Steam's `GetItems` asset API. Both sources agreed, unanimously: 86 games have no logo. The user was **staring at one of those logos**, rendered by the desktop app, while being told it didn't exist. Both probes were honest — and both were blind to the same thing: Steam serves library assets through a second, hash-addressed pipeline that neither the flat CDN nor the store API covers (mechanics in [[steam-library-integration]]). The census surveyed one population and reported on a different, larger one.
+
+The control for a believed negative is **positive**: run the probe on an instance where the answer is KNOWN to be yes. Here that was trivial and skipped — probe a game whose logo is visibly rendering; the census answers "no logo"; the instrument is proven blind and every "no" it produced is void. Note what unanimity was actually worth: two probes that share a blind spot agree for free. Corroboration only counts across probes with *different* failure modes.
+
+Two rules of thumb fall out:
+
+- **A user staring at the screen outranks a unanimous probe census.** "I'm looking at it" is a positive instance handed to you for free — treat it as the control, not as noise to argue with. The correct response is "my instrument must be blind — where's the pipeline it can't see," never "the API says otherwise."
+- **Before publishing a negative ("X doesn't exist", "none are affected"), name the population your probe can actually see** and check it matches the population your claim is about. "No logo in the store pipeline" was always true; "no logo exists" never followed from it.
+
 ## When the probe cannot be made honest
 
 Sometimes the endpoint that *would* answer truthfully is unavailable to you. In the case this came from, the JSON backend behind the SPA returns the real answer — and is gated by reCAPTCHA:
@@ -123,6 +136,8 @@ It is also the verification-side twin of [instrument-before-patching.md](./instr
 **An instrument that cannot fail is not measuring anything.** Prove it can fail, then believe it.
 
 ## Related
+
+- [[steam-library-integration]] — the census incident's mechanics: the two disjoint asset pipelines that made two honest probes unanimously wrong.
 
 - [[compose-invisible-text-localcontentcolor]] — where the vacuous-assertion case above came from, and the framework-default bug the broken guard was written to catch.
 - [[resolve-versions-from-the-registry-not-a-search-index]] — same family, different instrument: the endpoint that answered you was not the one that knows.
