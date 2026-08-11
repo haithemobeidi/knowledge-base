@@ -1,7 +1,7 @@
 ---
 stack: [cloudflare, tauri, rust, release-engineering, reliability]
 kind: gotcha
-last_verified: 2026-07-29
+last_verified: 2026-08-10
 ---
 
 # Your CDN's bot challenge blocks library user-agents, and an auto-updater is a library user-agent
@@ -134,6 +134,59 @@ That is not a design decision anyone made on your behalf. It is a coincidence yo
 2. **Log update-check failures somewhere you'll see them**, even while staying silent in the UI. Silent-to-the-user must not mean silent-to-you — a counter in your error reporter turns a permanently invisible bug into a graph that goes flat. Given you cannot test the client from a script, this is your real detector.
 3. **Assert what you actually can at release time:** that the manifest is published, parses, names the version you just shipped, and points at an artifact that returns 200. Useful, and *not* the same claim as "the updater can read it" — label it accordingly so a green run doesn't get quoted as proof later.
 4. **If you can't get an exemption, pin the UA** (`MyApp-Updater/1.2.3`) so at least a dependency bump can't change it underneath you — while remembering the fingerprint half is still outside your control.
+
+## Update 2026-08-10: three corrections from living with this
+
+### 1. On Cloudflare's free plan, the recommended fix does not exist
+
+"Exempt the release path" assumes you can write a WAF custom rule with a **Skip** action. Skip cannot bypass **Bot Fight Mode**, the free-plan feature. It can only bypass **Super Bot Fight Mode**, which is Pro and up. The names differ by one word and the capability differs completely, and the dashboard does not tell you this at the point of decision — you find out from the docs after building the rule.
+
+So on a free zone your options collapse to three, none of them the scoped exemption:
+
+1. **Turn Bot Fight Mode off**, which is zone-wide. Often fine, because the zone in question is usually a marketing site plus a bucket of deliberately-public installers: no login, no forms, no origin server, no egress billing. Worth checking what it is actually protecting before assuming it is protecting something.
+2. **Upgrade** to get the scopeable version.
+3. **Move the update feed to a host without bot filtering** — your own API server, which the app already talks to. This fixes every *future* update permanently, but **cannot rescue installed copies**, because the endpoint is compiled into the binaries already in the field. One manual reinstall is unavoidable, so if you are going to do it, do it *before* the release that people will be reinstalling anyway.
+
+Note also what Bot Fight Mode actually tests: it hands the client a **JavaScript challenge**. A desktop app has no JS engine, so it cannot pass — not "looks suspicious and gets flagged", but *structurally incapable of passing*. There is no header, UA, or good behaviour that fixes it from the client side.
+
+### 2. The symmetry: a probe that FAILS is no more trustworthy than one that passes
+
+The section above establishes that curl passing proves nothing about your app. The inverse is equally true and much easier to fall for, because a failure feels like discovering a bug rather than making a claim.
+
+I built what should have been the perfect probe: a `#[test]` **inside the application's own crate**, using the app's own `reqwest` at the app's own version with feature unification identical to the shipped binary, replicating `tauri-plugin-updater`'s exact request — its UA read out of the dependency source, with and without its default `Accept: application/json`.
+
+```
+[ota] updater-shaped request: 403 Forbidden
+[ota] same UA, no Accept:     403 Forbidden
+```
+
+Conclusion drawn: OTA is dead for every user. Consequence: an hour spent on stranded-user mitigation, a security-settings decision pushed at the product owner, and a ledger entry announcing an outage.
+
+Then a real installed build self-updated, first try.
+
+**A same-language, same-crate, same-version imitation of your client is still not your client.** Something differed — TLS backend selected at link time, connection reuse, IP reputation, per-path rules, request timing — and finding out which was never worth the effort, because the behavioural test is cheap and definitive. The rule to carry: **a probe result is evidence about the probe.** In both directions. State probe findings as "my imitation was refused", never as "the updater is broken", and let the behavioural test settle it before anyone changes their infrastructure.
+
+### 3. If you add a runtime asset download, it will be blocked even when the updater is not
+
+This is the corollary that bit us. The updater passes this host. Our own downloader, fetching an ML model from **the same host, the same day**, was refused — and users saw it, because unlike an update check, a user-initiated download fails loudly:
+
+```
+The download server returned 403 Forbidden for the voice model.
+```
+
+So "OTA works" tells you nothing about the next thing you host there. Any in-app fetch you add (model, dictionary, data pack, asset bundle) is a fresh client the classifier has never seen.
+
+**The cheap insurance is a source chain with a pinned hash:**
+
+```rust
+const MODEL_SOURCES: [&str; 2] = [
+    "https://releases.example.com/models/model.bin",   // ours, preferred
+    "https://huggingface.co/org/repo/resolve/main/model.bin",  // upstream
+];
+// try in order; verify sha256 before installing whatever arrives
+```
+
+Your host first, so you are not dependent on a third party and so first-party service resumes automatically if the rule is ever relaxed. Upstream second, so a bot policy cannot take the feature down. **The pinned checksum is what makes the second source safe** — whoever serves the bytes, only the bytes you pinned are ever installed, so a fallback host is a delivery choice rather than a trust decision.
 
 ## Generalises beyond updaters
 
