@@ -83,5 +83,6 @@ That second command is the cheap general-purpose detector: **a shipped binary co
 
 ## See also
 
+- [march-native-ships-an-unrunnable-binary.md](./march-native-ships-an-unrunnable-binary.md) — the same generalisation one layer down, and the same feature one release later: having fixed the missing model, the next release shipped one compiled with `-march=native`, so the asset was finally present and the CPU refused the *code*. File paths are the obvious build-machine leak; **compile flags are the invisible one**.
 - [verify-the-artifact-your-user-receives.md](./verify-the-artifact-your-user-receives.md) — same family: what you built and what a stranger receives are different objects, and only one of them matters.
 - [bot-challenge-blocks-your-auto-updater.md](./bot-challenge-blocks-your-auto-updater.md) — if you fix this by downloading the asset at runtime, read this before choosing the host. Your own CDN may refuse your own app.
