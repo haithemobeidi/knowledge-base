@@ -1,7 +1,7 @@
 ---
-stack: [cloudflare-worker, d1, sqlite, tauri]
+stack: [cloudflare-worker, d1, sqlite, tauri, android, kotlin]
 kind: architecture
-last_verified: 2026-05-15
+last_verified: 2026-08-12
 ---
 
 # Local-First Sync to Cloudflare D1 — Patterns that survived contact with reality
@@ -393,6 +393,41 @@ set_meta(&pool, "last_pulled_at", "0").await?;  // ← critical
 ```
 
 Skipping this turns factory-reset into "factory-reset-and-stay-empty-forever" because the cloud will only send rows whose timestamp is > last_pulled_at, which is set to "yesterday afternoon."
+
+---
+
+## Pattern 14: Replay the outbox over every pulled snapshot — and read the outbox AFTER the fetch
+
+Proven a second time on a completely different stack (a Kotlin/Android client with a
+plain-REST outbox, no D1, no Tauri), which is what promoted it from "our bug" to a
+structural property of every hand-rolled outbox.
+
+A pull replaces your local cache with the server's snapshot. But the server is stale
+with respect to your own outbox by definition: anything still queued — written mid-pull,
+or undeliverable right now — is NEWER than what the server just said. If the snapshot
+lands raw, the refresh visibly reverts the user's just-made change, and then a later
+push flips it forward again. The lived symptom: a burst of status taps that flipped
+backwards, then forwards ("the app changed my choice, then changed it back") — the
+same class of bug on both stacks, months apart.
+
+Two rules, both load-bearing:
+
+1. **Replay pending ops over the fetched snapshot before it lands.** The apply step is
+   `merge(serverSnapshot, pendingOutboxOps)`, never `serverSnapshot` alone. Field-level
+   patches (Pattern 1) make this a cheap overlay.
+2. **Read the outbox AFTER the fetch completes, not before.** A write made during the
+   round trip must be caught by the overlay. Reading the queue first opens a window
+   exactly as long as your network latency in which user writes silently lose.
+
+Corollary: serialize whole sync passes (one mutex around push + pull + apply, same
+spirit as Pattern 7) so an older pass's fetch can never land after a newer pass's push.
+
+**Differential vs a lookalike:** if a just-made change reverts and the write was never
+IN the outbox at all (a dev fixture, a seed script, any write that bypassed the
+tracked path), that is a different lesson — see
+[local-fixture-reverts-under-authoritative-sync.md](./local-fixture-reverts-under-authoritative-sync.md).
+The tell: bypassed writes revert PARTIALLY along column-ownership lines; queued-but-
+clobbered writes revert wholesale and then reappear on the next push.
 
 ---
 
