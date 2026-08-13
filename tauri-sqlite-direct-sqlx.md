@@ -246,6 +246,8 @@ Then for each match, check whether the matching `selectRows` call returns remapp
 
 Don't write `.catch(() => {})` on outbox emissions. Even a `console.error` is enough to catch this class of bug in F12. Better: route to a structured dev-event ring buffer that survives panel closure (`pushDevEvent(...)` pattern). Silent-fail outbox writes can hide for entire release cycles.
 
+"Entire release cycles" is not hyperbole — see [sqlite-upsert-against-a-partial-index.md](./sqlite-upsert-against-a-partial-index.md), where a `console.warn` in a sync loop's resilience `catch` hid a statement that could *never* execute (a partial-index upsert missing its predicate) for months. Note the sharper rule that case produced: a resilience guard is for **row-level** errors. A prepare/compile-time error is a build defect wearing a runtime error's costume — 100% reproducible, never fixed by a retry — and should be re-raised, not absorbed.
+
 ---
 
 ## Common gotchas
