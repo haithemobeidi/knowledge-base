@@ -1,7 +1,7 @@
 ---
 stack: [release-engineering, distribution, cdn, cloudflare, r2, code-signing, virustotal]
 kind: pattern
-last_verified: 2026-08-08
+last_verified: 2026-08-15
 ---
 
 # Verify the artifact your USER receives, not the one you built
@@ -78,6 +78,12 @@ Measured contrast, same project, two releases apart: the previous release needed
 - **The scanner doesn't expose the digest of what it scanned.** Without that, the human's download proves nothing you can tie to your artifact.
 - **Reproducible-build guarantees are the actual requirement** (supply-chain attestation, SLSA). This pattern proves *your* file reached the user; it does not prove the file was built from the source you think. Different problem, different tooling.
 
+## The runtime twin: a test verdict is only as good as the binary that RAN it
+
+The same principle wears a second face during debugging (measured, Playmoir L-371, 2026-08-14): a committed fix was declared failed because "restart the app and re-test" showed the bug unchanged — but the restart relaunched the **installed release** from AppData, whose process had started **86 seconds before the fix commit existed**, off a bundle built two days earlier. The fix's branch had never executed anywhere. A full cross-device investigation ran against a phantom negative before anyone asked which executable had actually restarted.
+
+The cheap proof, before touching any code after "the fix didn't work": read the process table — executable **path** (installed dir vs dev build dir) and process **start time** vs the fix commit's timestamp. If the binary predates the commit, the test tested nothing. Same family as the deploy traps above (`dist/` stale by default; a check run seconds after deploy reads the previous deployment): in every variant, the artifact you *measured* is not the artifact you *changed*.
+
 ## The transferable core
 
-The badge is a promise about the user's copy. Every cheap check available to you examines your copy. **Design the verification so the one artifact you can definitely obtain — the user's — is the one that gets measured**, and let the hash comparison carry everything else. Where you cannot obtain it, get a human to fetch it for you; that is not a workaround, it is the most direct evidence available.
+The badge is a promise about the user's copy. Every cheap check available to you examines your copy. **Design the verification so the one artifact you can definitely obtain — the user's — is the one that gets measured**, and let the hash comparison carry everything else. Where you cannot obtain it, get a human to fetch it for you; that is not a workaround, it is the most direct evidence available. And when a fix "doesn't work," first prove the fix was ever in the artifact that ran.

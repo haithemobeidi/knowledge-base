@@ -1,7 +1,7 @@
 ---
 stack: [steam, rust, vdf, game-library-integration, cdn]
 kind: reference
-last_verified: 2026-08-11
+last_verified: 2026-08-15
 ---
 
 # Steam library integration — cover art, install-state, and the ToS constraint that shapes the whole architecture
@@ -75,6 +75,11 @@ Section 1's layout B (nested content-hash directories) is not just a directory s
 - **The library pipeline** — hash-addressed URLs of the shape `shared.steamstatic.com/store_item_assets/steam/apps/{appid}/{hash}/logo.png`. Publicly served (200, no auth), but the hashes come from appinfo, i.e. from the Steam **client** — no public web API exposes them. The client materialises them on disk as layout B: `librarycache/{appid}/{hash}/logo.png`.
 
 Measured on a real 728-game library (2026-08-10): 86 games have no flat `logo.png`; **21 of those have a logo that exists only in the library pipeline** (new titles are the common case), which the Steam client renders happily while every web-side probe swears no logo exists. The remaining 65 genuinely have no logo asset anywhere — for those, a text fallback is *correct* and Steam's own client shows text too.
+
+Two more measured facts in the same family (2026-08-14, appids 3768760 / 1004640 / 2542020):
+
+- **The portrait capsule has TWO per-game flat-CDN spellings** — `library_capsule.jpg` vs `library_600x900.jpg` — and each game answers 200 on exactly one of them and 404 on the other. Neither spelling is "the modern one"; a fallback chain must try both, in either pipeline.
+- **A hash-addressed URL serves each asset under EXACTLY the filename its librarycache hash dir holds** — you cannot harvest a hash from `logo.png` and reuse it to fetch `library_capsule.jpg`; every asset carries its own hash. And new titles may publish **ZERO** flat CDN assets at launch: the hash pipeline can be the only source of any art at all, not just logos.
 
 **The workable fix for a companion device (phone/web) that can't read librarycache:** harvest the hashes from a machine that can — one pass over `librarycache/*/*/logo.png` yields `{appid → hash}` — and mirror them through your own backend as a column the companion client reads. Two properties make this better than it sounds:
 
