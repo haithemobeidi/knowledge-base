@@ -1,7 +1,7 @@
 ---
 stack: [css, react, animation, web-platform]
 kind: gotcha
-last_verified: 2026-07-28
+last_verified: 2026-09-02
 ---
 
 # A cross-fade "flash" is a luminance gap, not a visibility problem
@@ -42,7 +42,7 @@ There are genuinely two things wrong with the naive cross-fade, and they need di
 - **Ghost clears sooner, pulse gone** → you only had the visibility problem.
 - **Ghost clears sooner, pulse remains** → the luminance gap, which timing cannot fix.
 
-Worth computing per frame rather than eyeballing. With both layers at `duration-280 ease-out`, the visible ghost of the outgoing screen — `(1 − α_in)·α_out` — runs 0.64 at frame 1, 0.19 at frame 4, 0.03 at frame 8, and is still nonzero at frame 10 (~167ms at 60fps).
+Worth computing per frame rather than eyeballing — and if you are eyeballing a *recording*, check first that the recorder isn't adding a luminance step of its own (`screen-recordings-lie-about-luminance.md`). With both layers at `duration-280 ease-out`, the visible ghost of the outgoing screen — `(1 − α_in)·α_out` — runs 0.64 at frame 1, 0.19 at frame 4, 0.03 at frame 8, and is still nonzero at frame 10 (~167ms at 60fps).
 
 **Where it becomes obvious:** when the destination doesn't occupy the same area as the source. A centred/narrow screen (a settings page, a modal-ish view) leaves margins where the outgoing full-width screen is completely unmasked, and the wider the display the larger those margins. The same transition is invisible on a laptop and glaring on an ultrawide — which is why it survives review for years.
 
@@ -98,10 +98,13 @@ It's also compositor-work on textures rather than two animating DOM trees, which
 
 **Caveats worth knowing before you commit:**
 
-1. **The DOM update must be synchronous inside the callback.** Frameworks that batch state updates need an escape hatch — in React before 19 that's `flushSync(() => setScreen(s))`. React 19 ships a `<ViewTransition>` component that removes the workaround, so this feature is a real argument in an upgrade discussion rather than a nice-to-have.
-2. **Remove your existing CSS transitions on those containers**, or both animations run and fight.
-3. **Reduced motion needs explicit wiring.** The default cross-fade is animation; if your app has its own motion-preference system (not just the media query), bridge it — see `motion-design-token-system.md`, which covers why a media query alone under-covers.
-4. Availability: same-document view transitions reached **Baseline "Newly available" on 2025-10-14**. Chromium (Chrome/Edge) from 111, WebKit from Safari 18, Gecko later still — sources disagree on the exact Firefox version, so check before relying on it there. Chromium-based webviews (Electron, Tauri's WebView2) inherit it, so desktop shells have had it since well before the web-at-large baseline. Note Firefox's initial implementation omitted view-transition *types*.
+1. **The DOM update must be synchronous inside the callback.** Frameworks that batch state updates need an escape hatch — in React that's `flushSync(() => setScreen(s))` inside the callback, and it is a justified use (the API's own contract), not a smell. **Correction (2026-09-02):** an earlier version of this lesson said React 19 ships a `<ViewTransition>` component that removes the workaround. It does not, yet — as of 2026-09-01 the component is **canary/experimental only**, absent from stable 19.2.8 (verified by unpacking the tarball: react-dom's stable build contains no `startViewTransition` at all). Plan on the native API behind one small wrapper. When the component does land, note that React calls `startViewTransition` itself and **interrupts any other view transition on the page**, so that wrapper must be the only caller until you swap it out.
+2. **Remove your existing CSS transitions on those containers**, or both animations run and fight. Make the swap itself instant; the snapshots do all the animating.
+3. **Only the duration is yours — keep both halves symmetric.** The UA cross-fade puts `mix-blend-mode: plus-lighter` on the old/new image pair, which is what makes it gap-free: `fade-out(t) = 1 − fade-in(t)`, so old + new sum to full coverage on every frame. The Fix-A instinct (shorter out, longer in) applied to `::view-transition-old(root)` / `::view-transition-new(root)` re-creates the dip in a new costume. Set one `animation-duration` on both pseudo-elements — from your motion token so a "reduced" preference halves it — and leave the UA keyframes and curve alone.
+4. **Gate it in JS, not only CSS.** The universal motion-kill selectors (`html[data-motion-pref='off'] *, *::before, *::after`) do not reach the `::view-transition-*` pseudo-elements — they hang off the root, not off `*`. Skip the API entirely for "off" / OS-reduced by checking the preference synchronously before calling it.
+5. **Swallow the rejection of a skipped transition.** A second navigation landing before the first finished skips it and rejects its `ready` promise; if your app files unhandled rejections to a crash reporter, rapid clicks become crash reports. `transition.ready.catch(() => {})` — the update has already been applied by then.
+6. **Reduced motion needs explicit wiring.** The default cross-fade is animation; if your app has its own motion-preference system (not just the media query), bridge it — see `motion-design-token-system.md`, which covers why a media query alone under-covers.
+7. Availability: same-document view transitions reached **Baseline "Newly available" on 2025-10-14**. Chromium (Chrome/Edge) from 111, WebKit from Safari 18, Gecko later still — sources disagree on the exact Firefox version, so check before relying on it there. Chromium-based webviews (Electron, Tauri's WebView2) inherit it, so desktop shells have had it since well before the web-at-large baseline. Note Firefox's initial implementation omitted view-transition *types*.
 
 ## The meta-lesson
 
