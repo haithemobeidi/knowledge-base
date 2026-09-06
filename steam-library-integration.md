@@ -1,7 +1,7 @@
 ---
 stack: [steam, rust, vdf, game-library-integration, cdn]
 kind: reference
-last_verified: 2026-08-15
+last_verified: 2026-09-06
 ---
 
 # Steam library integration — cover art, install-state, and the ToS constraint that shapes the whole architecture
@@ -91,3 +91,11 @@ The epistemics of how this was almost missed — a unanimous two-source census c
 ## Related, adjacent domain (save-file locations, not cover art)
 
 If a future feature needs "where does game X keep its save files," don't build a proprietary per-game path database from scratch — the community already maintains one: `mtkennerly/ludusavi` (Rust, GPL-3) ships a manifest dataset (`ludusavi-manifest`) derived from PCGamingWiki's save-location data, keyed by Steam appid. Check its license terms before redistributing, but it's a solved, actively-maintained problem — don't re-derive it by hand.
+
+**But: save-location rules and save data have independent timelines (measured 2026-09-06).** Whatever the rule source — Steam's own Auto-Cloud `ufs/savefiles` entries in appinfo, ludusavi's manifest, PCGamingWiki — it describes where the *current* build saves. An install that predates a patch can be writing somewhere else, and a sync/export tool that only looks where the rules point reports "no save files" while the save is sitting one folder away. The concrete case: ZENONIA 1 (appid 4538960) launched 2026-08-31 with no cloud support; the 2026-09-03 hotfix added Auto-Cloud rules of the shape `WinAppDataLocalLow/CONFAK/Zenonia/Save_Release/{64BitSteamID}/slot_00N/*.bin`. The launch build wrote `Save_Release/slot_00N/` with no SteamID folder. GameNative on a handheld fetched the new rules, found nothing under the SteamID path, and produced a 0-byte export and a cloud sync that uploaded nothing — all correct behaviour, wrong data. Three rules fall out:
+
+- **Compare timestamps before trusting an empty match:** rule-set change date vs. the game build the data was written by. "The game gained cloud saves in a patch" is the tell — the patch usually also moves the folder (per-account subfolders arrive with cloud support because the cloud is per-account).
+- **Update the game before moving files by hand.** The patched build migrated the old save into the new folder on first launch without help; the hand-move would have been wasted work and a chance to corrupt something.
+- **Steam Cloud's first-upload race is a real conflict, not an error.** Opening the patched game on a second machine (a desktop) before the handheld had uploaded made that machine upload its fresh, empty per-account files. The handheld's next sync then saw "new remote + new local" and refused with a conflict; the launcher's launch-time dialog offered "Keep local" / "Keep remote", and *keep local* (the machine holding the real progress) uploaded it and overwrote the empty set. Expect this whenever cloud support arrives mid-playthrough and more than one machine touches the game; resolve from the machine with the progress, never from the fresh one.
+
+If you *do* end up needing to read a save tree out of storage you can't reach directly, [[app-export-as-read-channel-into-private-storage]] is the trick.
