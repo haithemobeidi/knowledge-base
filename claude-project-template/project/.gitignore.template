@@ -9,3 +9,6 @@
 
 # Project-specific ignores go below
 # ---------------------------------
+
+# Python bytecode from the protocol scripts
+__pycache__/

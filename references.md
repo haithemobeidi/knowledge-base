@@ -12,7 +12,7 @@ Curated pointers for when you next refactor the Knowledge Base or start a new pr
 - **[abhishekray07/claude-md-templates](https://github.com/abhishekray07/claude-md-templates)** — Real CLAUDE.md files from HumanLayer, Cloudflare, ChrisWiles. Steal phrasing.
 - **[Filip-Podstavec/claude-leverage](https://github.com/Filip-Podstavec/claude-leverage)** — Subagents + commands + hooks shipped as an installable plugin. Clean clean-tree-guard hook patterns. Read for ideas, don't install.
 - **[centminmod/my-claude-code-setup](https://github.com/centminmod/my-claude-code-setup)** — Cross-session memory-bank pattern. Compare against your `HANDOFF_LOG.md` design.
-- **[elizabethfuentes12/claude-code-dotfiles](https://github.com/elizabethfuentes12/claude-code-dotfiles)** — Pattern for syncing `~/.claude/` via git with explicit allowlist. Adopt if you start working on >1 machine.
+- **[elizabethfuentes12/claude-code-dotfiles](https://github.com/elizabethfuentes12/claude-code-dotfiles)** — Pattern for syncing `~/.claude/` via git with explicit allowlist. Adopted in lightweight form 2026-09-08: `claude-project-template/install-global.py` writes `@import` lines into `~/.claude/CLAUDE.md` that point at this repo's clone, so a KB pull updates the global rules on each machine; only the two slash commands are copied.
 - **[github/spec-kit](https://github.com/github/spec-kit)** — `/specify` → `/plan` → `/tasks` flow. Currently rejected as overkill for solo work; reconsider if scope grows.
 
 ## MCP servers

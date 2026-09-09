@@ -1,152 +1,139 @@
 # Claude Code Project Template
 
-A copy-in-and-customize skeleton for new projects that want the session protocol, code quality rules, and automated codebase-index discipline developed on a real Tauri + Cloudflare project.
+A session protocol for Claude Code that lets each new session pick up a project as if the same person had never left: one rolling state doc, an append-only handoff log, a moment-of-event ledger, a hook-enforced codebase index, and rules for two sessions working on two versions of the same app at once. Extracted from a desktop + mobile product after ~120 sessions and ported to six repos; every rule traces to a measured failure.
 
-## Prerequisites
+## Two layers
 
-The template's hooks rely on one harness-provided environment variable:
+```
+Knowledge Base repo (this folder)                 Each project repo
+─────────────────────────────────────             ─────────────────────────────────────
+global/WORK_STYLE.md        ──@import──▶  ~/.claude/CLAUDE.md   (every session, every project)
+global/WORK_STYLE_DETAIL.md   (read on demand)
+global/PROTOCOL.md          ──@import──▶  ~/.claude/CLAUDE.md
+global/commands/start.md    ──copy────▶  ~/.claude/commands/   (project copies win if present)
+global/commands/end.md
+install-global.py             ← run once per machine, rerun after each KB pull
 
-- **`CLAUDE_PROJECT_DIR`** — the absolute path of the project root. Claude Code sets this automatically when launching, so the Python scripts in `.claude/scripts/` resolve project-relative paths correctly. **You should not need to set it yourself.**
+project/CLAUDE.md           ──copy────▶  <repo>/CLAUDE.md      what is DIFFERENT about this app
+project/.claude/protocol.json ─copy───▶  <repo>/.claude/       the scripts' settings (edited per project)
+project/.claude/scripts/    ──copy────▶  <repo>/.claude/       byte-identical; drift-checked against here
+project/.claude/settings.json, agents/
+project/docs/*.md, DECISIONS.md, .gitignore.template, .mcp.json.template
+```
 
-If hooks are silently doing nothing (see Troubleshooting), the most common cause is that `CLAUDE_PROJECT_DIR` is unset because Claude Code was launched from outside the project root, or because a wrapper / IDE plugin stripped it. Verify with `python -c "import os; print(os.environ.get('CLAUDE_PROJECT_DIR'))"` from inside Claude Code's Bash tool.
+- **Global** = how the user works (any app) + the session lifecycle. Lives here, imported live, so a `git pull` of the Knowledge Base updates every project on the machine.
+- **Project** = identity, stack, layout, project rules, explicit overrides, and one settings file. Copied in once.
+- **Enforcement** (hooks and scripts) stays inside each repo so a fresh clone is protected on day one, but is never hand-edited: everything that differs per project is in `protocol.json`, and `check-template-drift.py` reports when a repo falls behind this template.
 
-Other prerequisites: `python3` on `PATH`, `git`, and a Claude Code version recent enough to support `SessionStart`, `PostToolUse`, and `Stop` hooks (any 2025-Q4 build or later).
+## Install the global layer (once per machine)
 
-## What this gets you
+```bash
+python "<KB>/claude-project-template/install-global.py"          # install / refresh
+python "<KB>/claude-project-template/install-global.py" --check  # is it current?
+python "<KB>/claude-project-template/install-global.py" --uninstall
+```
 
-- **Auto-loaded `CLAUDE.md`** — project rules + work style that every session starts with.
-- **`PROTOCOL.md`** — the single source of truth for session lifecycle (start / during / end).
-- **`/start` + `/end` slash commands** — wired session begin/close with worktree guard, clean-tree guarantee, auto-push, and a mandatory start-of-session **CROSS-CHECK** (NEXT ACTION vs the status spine vs the last handoff → flag contradictions instead of trusting one file).
-- **Anti-drift status model** — a single "status at a glance" **spine** table in `ROADMAP.md` is the sole source of truth for where the project stands; `CURRENT_STATE.md` only points at it. Phase/block numbers are **frozen** (a cut item stays a labeled gap, never renumbered). This kills the "which phase are we on?" drift that happens when two docs both keep a status list. The `SessionStart` hook injects the spine and the cross-check directive automatically.
-- **Open-item ledger (`docs/SESSION_LEDGER.md`)** — an append-and-strike ledger for queued tests, pre-release gates, riders, and watch items, written **at the moment** things are queued or resolved instead of recalled at `/end`. Added 2026-07-24 after a drift audit on the source project found four measured failure modes in recap-based wrap-ups (facts lost, wrong, duplicated, or read stale — a passed smoke test literally vanished from a wrap because long sessions get context-compacted). `/end` reconciles the ledger mechanically (Step 1d), `/start` and the hook surface it, and a **mini-wrap rule** covers post-`/end` follow-up work with delta-only records.
-- **Bidirectional `CODEBASE_INDEX.md` discipline** — the `PostToolUse` hook covers the forward direction (new file on disk → appended to a pending queue → `/end` refuses to complete until it's indexed); `validate-index.py` (run at `/end` Step 1c) covers the reverse (index rows pointing at files that no longer exist → flagged for removal).
-- **Session docs skeleton** — `CURRENT_STATE.md` (NEXT-ACTION-first shape), `HANDOFF_LOG.md`, `CODEBASE_INDEX.md` with the conventions baked in.
-- **`.mcp.json.template`** — opt-in Cloudflare MCP server bundle (Workers Bindings, observability, browser rendering). Rename to `.mcp.json` and follow the inline comments to enable.
+It writes a managed block into `~/.claude/CLAUDE.md` (two `@import` lines pointing at this folder, plus the KB path) and copies `start.md` / `end.md` into `~/.claude/commands/`. Anything else in `~/.claude/CLAUDE.md` is left alone. Restart open sessions afterwards. **After each `git pull` of the Knowledge Base, rerun it** — the imports are already live, but the command copies are not.
 
-## How to apply to a new project
+If a project session starts without the global layer, the start hook says so loudly before anything else.
 
-1. **Copy files into the new project root.** The template mirrors the target layout — `.claude/` stays as-is, `docs/` stays as-is, the `.md` files go at the repo root.
+## Bootstrap a new project (agent procedure)
 
-   First, set `KB_TEMPLATE_DIR` to wherever your Knowledge Base lives (one-time per shell, or persist via your profile / `[Environment]::SetEnvironmentVariable`):
+> **If you are an AI agent** and the user says "copy the KB over", "set this project up with the template", "bootstrap from the Knowledge Base", or anything equivalent: follow this exactly.
 
-   PowerShell:
+1. **Global layer first.** Run `install-global.py --check`; if not current, run the installer and tell the user to restart the session after bootstrap.
+2. **Copy `project/` only** — never the whole template folder, never the lesson files.
+   - PowerShell: `robocopy "<KB>\claude-project-template\project" . /E /XD .git`
+   - Bash/macOS/Linux: `cp -r "<KB>/claude-project-template/project/." .`
+3. **Ask one question if the stack is unknown:** "What stack is this project (and does it have more than one version, e.g. desktop + mobile)?"
+4. **Fill `CLAUDE.md`** — replace every `<TODO>`: identity, locked stack, layout, how to run, project rules. Delete the Tracks section for a single-version app. Leave Overrides empty unless the user names one.
+5. **Fill `.claude/protocol.json`** — `check_command`, `audit_command`, `push_policy` (ask unless the user pre-authorises and you record it in `DECISIONS.md`), `index_skip_prefixes` (generated dirs), and `tracks` + `shared_paths` for a multi-version app.
+6. Rename `.gitignore.template` → `.gitignore` and append project ignores. If the project uses Cloudflare, rename `.mcp.json.template` → `.mcp.json` and follow its comments; otherwise delete it.
+7. `docs/CURRENT_STATE.md`: fill the NEXT ACTION line. Leave the other docs as shipped — they grow at `/end`.
+8. **Verify the hooks fire** (do not assume): Write a throwaway `tmp-hook-check.md`, read `.claude/pending-index-updates.txt` — it must list the file. Delete both. Run `python .claude/scripts/check-template-drift.py` — it must say up to date. If either fails, see Troubleshooting.
+9. Initial commit: `Bootstrap project from claude-project-template`. Push only if asked.
 
-   ```powershell
-   $env:KB_TEMPLATE_DIR = "C:\path\to\Knowledge Base\claude-project-template"
-   # from the new project's root:
-   robocopy "$env:KB_TEMPLATE_DIR" . /E /XD .git
-   ```
+Lessons in the Knowledge Base root are **not** loaded at bootstrap. Pull one in when the work maps to it (the `kb` agent does this), not before.
 
-   Git Bash / WSL / macOS / Linux:
+## The project file (`CLAUDE.md`)
 
-   ```bash
-   export KB_TEMPLATE_DIR="$HOME/path/to/Knowledge Base/claude-project-template"
-   # from the new project's root:
-   cp -r "$KB_TEMPLATE_DIR/." .
-   ```
+The outline in `project/CLAUDE.md` has eight optional sections: what this is · locked stack · where the code is · tracks · how to run · project rules · overrides · where things live. Every line in it must pass three tests:
 
-   After copying:
-   - Rename `.gitignore.template` → `.gitignore`.
-   - Verify `.claude/pending-index-updates.txt` is empty (template ships drained; if not, empty it before `/end`).
-   - If you plan to use Cloudflare MCP servers, rename `.mcp.json.template` → `.mcp.json` and follow the comments inside.
+1. **Contradicts a global rule?** → it belongs in *Overrides*, naming the rule, the replacement, the reason, and the date. Nowhere else.
+2. **Actionable?** → a trigger and an action. "Make it feel premium" is not a rule; "when editing user-facing copy, no em-dashes" is.
+3. **Specific to this app?** → if it would be true in another app it goes in the global work style or the Knowledge Base.
 
-2. **Customize `CLAUDE.md`** — search for `<ProjectName>`, `<project-name>`, and `<TODO>` markers. Fill in:
-   - Project name + one-line purpose
-   - Locked technical decisions table (frontend, backend, DB, etc.)
-   - Delete any "Work style" sections that don't apply (e.g. drop "mock before you build" for non-UI projects)
+Keep it under ~150 lines. It is the only prose file edited per project.
 
-3. **Customize `PROTOCOL.md`** — generally works as-is. Only edit if your project has unusual session conventions.
+## `.claude/protocol.json`
 
-4. **Customize `.claude/commands/start.md` + `end.md`** — these now use generic phrasing ("`cd` into your project root and run `claude`") so no path substitution is required. Edit only if you want to add project-specific guidance.
+| Key | Default | Meaning |
+|---|---|---|
+| `spine_heading` | `status at a glance` | Heading (substring, case-insensitive) that opens the ROADMAP status table |
+| `check_command` | `""` | Run at `/end` Step 0c; non-zero stops the wrap |
+| `audit_command` | `""` | Run at start; mentioned only on findings |
+| `push_policy` | `ask` | `standing` pre-authorises session-end pushes (record it in DECISIONS.md) |
+| `secret_scan` | `true` | Content-based secret scan at `/end` |
+| `index_skip_prefixes` | `[]` | Extra paths the index hook ignores (generated code) |
+| `ledger.item_max_chars` | `600` | Hard cap per ledger item; the start hook truncates over it |
+| `ledger.open_soft_max` | `30` | `/end` reports when exceeded and offers triage |
+| `ledger.stale_after_days` | `45` | Older open items listed at `/end` as route-or-close |
+| `ledger.prune_closed_after_days` | `7` | Struck lines older than this are pruned |
+| `tracks` | `[]` | Parallel tracks: `{name, prefix, owns[]}` each |
+| `shared_paths` | `[]` | Paths every track may edit, with an announcement |
 
-5. **Prime the docs** — `docs/CURRENT_STATE.md` has placeholders for Day 1; fill in the single **📍 NEXT ACTION** line (session-start reports it verbatim). `docs/HANDOFF_LOG.md` is just a header. `docs/CODEBASE_INDEX.md` starts empty but grows with every `/end` as the PostToolUse hook captures new files. `docs/SESSION_LEDGER.md` ships with rules + no items — it fills itself the first time work gets queued for later ("next session," "before release," …).
+## Parallel tracks — desktop and mobile side by side
 
-6. **Create the status spine (when the roadmap lands)** — the anti-drift model depends on one authoritative status list. When you write `ROADMAP.md`, give it a **"📊 status at a glance" spine table** (one row per phase/block + its status, with a CURRENT marker). `CURRENT_STATE.md` and the `/start` cross-check read from it; do **not** duplicate the phase list anywhere else. Until the spine exists, the hook and cross-check simply skip it — nothing breaks, you just don't get drift protection yet.
+Two sessions, one checkout, one branch, on purpose: they see each other's work instantly and the mobile build tests against the server the desktop track deploys. The rules that make it safe (full text in `global/PROTOCOL.md`):
 
-7. **Verify the hook works** — open Claude Code in the new project, then ask it to `Write` a throwaway file at `tmp-hook-check.md`. Then read `.claude/pending-index-updates.txt`:
-   - **Contains `tmp-hook-check.md`** → hook is live. Delete the throwaway file and clear the pending entry.
-   - **Empty or missing** → hook didn't fire. See "Troubleshooting" below before continuing.
+- Each session **declares its track** before touching anything; the start hook gates on it.
+- **IDs are prefixed per track with independent counters** (`D-12`, `M-3`), so two writers never collide. A tag `→mobile` / `→all` after the date says who acts on an item.
+- Each track **edits only its owned paths plus shared paths**; shared changes are announced with a tagged ledger line; deploy state lives in CURRENT_STATE's Shared block.
+- The other session's uncommitted files are **left alone and reported**; the stop hook tolerates them only inside that track's owned paths; `git add -A` is forbidden.
+- **A push publishes the whole branch** — commits that are not yours are named in the report.
+- CURRENT_STATE has one NEXT ACTION per track; handoff lines carry the track; the cross-check uses your track's last line.
 
-   (An empty pending file in normal operation means "no undocumented files queued." Right after writing a brand-new file, it should be non-empty.)
+## What the ledger is and isn't
 
-8. **Optional but recommended:** Add a `DECISIONS.md` at the repo root for architectural decision records. The `/end` protocol references it as the home for "pre-authorized push" consent and major tech choices.
+The ledger holds open loops a future session must act on — queued tests, gates, riders, deferred decisions — written **at the moment** they arise. It is not for bugs, feature ideas, or status (those have their own homes), and not for analysis: an item is capped at 600 characters, the analysis goes to a linked doc. The start hook injects only open items, truncated at the cap, grouped by track, and lists what is stale. Before this cap one project's ledger reached 99 open items averaging 2,500 characters and injected ~250KB at every session start.
 
 ## Troubleshooting
 
-### Hooks don't seem to be firing
+**Hooks don't fire** (writing a file leaves `pending-index-updates.txt` empty): (1) `python --version` inside Claude Code's shell — the hook commands invoke `python` literally; (2) `python -c "import os; print(os.environ.get('CLAUDE_PROJECT_DIR'))"` — empty means the harness didn't set it (launched outside the project root, or a wrapper stripped it), and every script silently no-ops; (3) run a hook by hand with a synthetic event (see MIGRATION.md §6); (4) confirm the matcher in `.claude/settings.json` is `Write|Edit`.
 
-Symptoms: you write a new file, but `.claude/pending-index-updates.txt` stays empty. Or `/end` completes despite undocumented files in the diff.
+**"Global rules not installed"** at session start: run the installer for this machine (the path is in the message), restart.
 
-Diagnostic order:
+**Template drift reported**: `python .claude/scripts/check-template-drift.py` lists the files; `--sync` copies the template's versions in (after the user agrees). If the project's version is a genuine improvement, upstream it here instead.
 
-1. **Confirm hook is wired.** `cat .claude/settings.json | python -c "import sys, json; print(json.load(sys.stdin)['hooks'].get('PostToolUse'))"`. Should print a non-empty list referencing `track-new-file.py`.
-2. **Confirm Python is on PATH.** Run `python --version` (or `python3 --version`) from inside Claude Code's Bash tool. The hook command in `settings.json` invokes `python` literally.
-3. **Confirm `CLAUDE_PROJECT_DIR` is set.** Inside Claude Code, run `python -c "import os; print(os.environ.get('CLAUDE_PROJECT_DIR'))"`. Empty output = hooks will silently no-op (the script returns early when the var is unset; see `track-new-file.py:68`).
-4. **Run the hook manually.** Pipe a synthetic event into the script:
-   ```bash
-   echo '{"tool_name":"Write","tool_input":{"file_path":"<absolute path to a test file>"}}' \
-     | CLAUDE_PROJECT_DIR=$(pwd) python .claude/scripts/track-new-file.py
-   ```
-   Then check `.claude/pending-index-updates.txt`. If this works manually but not in-session, the harness isn't passing the env var or isn't matching `Write|Edit`.
-5. **Check the matcher.** The hook is registered with matcher `Write|Edit`. If your Claude Code version uses a different tool name (e.g. `WriteFile`), the matcher misses every event silently.
+**Worktree guard trips every session**: Claude Code Desktop force-creates worktrees; use the CLI from the project root, or the desktop workaround in `/start`.
 
-### `/end` reports paths as missing from the index, but the hook should have caught them
+**`/end` finds unindexed paths the hook should have caught**: Step 1b is the backstop doing its job; add the rows and note the miss in CURRENT_STATE.
 
-This is Step 1b doing its job. The hook is the primary path; Step 1b is the belt-and-suspenders backstop that runs `git diff --name-only HEAD` + `git ls-files --others --exclude-standard`. Trust the backstop, add the missing entries, and add a "things to watch" note in `CURRENT_STATE.md` so next session knows the hook silently dropped events.
+## Migrating an existing project
 
-### Worktree guard trips on every session
+See [`MIGRATION.md`](./MIGRATION.md). One session, not concurrent with another session in the same checkout.
 
-You're on Claude Code Desktop, which force-creates worktrees. See the linked GitHub issue + Reddit workaround in `.claude/commands/start.md`. Or switch to the CLI.
+## What's opinionated vs generic
 
-## What's opinionated vs. generic
-
-| Layer | Opinionated? | Why |
+| Layer | Opinionated? | Notes |
 |---|---|---|
-| Code quality rules (500/800 line caps, no `utils/`, Zod at boundaries, DRY 3+) | Yes | These are the template author's standing preferences; drop/edit to taste |
-| Session lifecycle (overwrite `CURRENT_STATE`, append `HANDOFF_LOG`, auto-push) | Mostly | The protocol shape is generic; the auto-push consent requires your sign-off per project |
-| PostToolUse hook + `validate-index.py` for bidirectional index tracking | Yes | Addresses a real discipline-failure mode; strongly recommended |
-| Status spine as single source of truth + `/start` cross-check + frozen numbers | No | Generic anti-drift mechanism — helps any project that keeps a running status doc. Costs nothing until you create the spine |
-| Worktree guard on `/start` + `/end` | Yes | Claude Code Desktop force-creates worktrees; this flagbreaks the user out of them. Only relevant if you hit the same problem |
-| Mock-before-build workflow | No | Only applies to UI-heavy projects. Drop the section in `CLAUDE.md` for backend/CLI projects |
+| Work style (pause-points, mock-first, grounded both ways, user-clickable tests) | Yes | The user's way of working; edit `global/WORK_STYLE.md` to taste |
+| Code quality caps (500/800, DRY at 3, no `utils/`) | Yes | Standing preferences |
+| Session lifecycle, ledger, index hook, clean-tree guard | Mostly generic | The shape works for any solo long-horizon project |
+| Spine as single source of truth + cross-check + frozen numbers | Generic | Costs nothing until a roadmap exists |
+| Parallel tracks | Generic | Inert until `tracks` has two entries |
+| Worktree guard | Situational | Only if Claude Code Desktop keeps spawning worktrees |
 
-## Where to put what — CLAUDE.md vs memory vs DECISIONS.md
+## Where to remember things
 
-The template uses three separate places for "things Claude needs to remember." Picking the right one matters because each has different cost and lifetime.
-
-| Place | Lifetime | Auto-loaded? | Use for |
-|---|---|---|---|
-| `CLAUDE.md` (in repo) | Project-wide | Every turn | **Non-negotiable rules** that apply to every change. File caps, DRY policy, Zod-at-boundaries. Keep it lean — every line costs context. Long-form rules go in `docs/WORK_STYLE.md`. |
-| `DECISIONS.md` (in repo) | Project-wide | On demand | **Architectural decisions with rationale.** Why you picked Cloudflare D1, why session-end auto-push is pre-authorized, why you banned worktrees. Append-only; never overwrite. |
-| `~/.claude/projects/<slug>/memory/` (auto-loaded by harness) | Per-user, per-project | Every turn (the index) | **Cross-session learnings about THIS user on THIS project** — feedback they've given you, project-specific context not in code, references to external systems. Save these as you discover them; don't restate them in `CLAUDE.md`. |
-
-### What to save to memory
-
-The harness manages four memory types: `user` (who they are), `feedback` (corrections + validated approaches), `project` (current state, who's doing what, deadlines), `reference` (where to look in external systems). Save freely; the harness has its own discipline about what's worth keeping.
-
-**Examples of memory-worthy moments on a typical project session:**
-
-- User says "stop using `any` even in test files — we want strict everywhere" → `feedback` memory.
-- User mentions "the CRDT logic in this repo is based on Yjs, see https://docs.yjs.dev/" → `reference` memory.
-- User says "we're cutting v0.3 next Friday so let's not start anything that won't finish by Wednesday" → `project` memory (with absolute date).
-- User confirms a non-obvious architectural choice ("yeah, keeping the migration runner inline was the right call here, splitting it would just be ceremony") → `feedback` memory (validated judgment, not a correction).
-
-### What NOT to save to memory
-
-- Anything already in `CLAUDE.md` or `docs/CODEBASE_INDEX.md` — duplicates rot.
-- Recent git history or "what was done last session" — `git log` and `CURRENT_STATE.md` are authoritative.
-- Code patterns that are obvious from reading the code itself.
-- Bug fixes you just made — the commit message is the record.
-
-The rule of thumb: memory is for things that would be hard to figure out by reading the repo today.
-
-## What this template does NOT include
-
-- **Tech stack choices** — no frontend framework, no DB, no deployment target. Each project picks its own and records them in its `CLAUDE.md` "Locked technical decisions" table.
-- **A `ROADMAP.md`** — your project's phases are your project's business. `CLAUDE.md` references this file as optional context. **When you do create it, give it a "📊 status at a glance" spine table** — one row per phase/block with its status. That table is the single source of truth the protocol's `/start` cross-check and the SessionStart hook read from (see `PROTOCOL.md` → "Where-are-we: one source of truth, frozen numbers"). Until the spine exists, the hook simply skips it — nothing breaks.
-- **Per-folder `README.md` conventions** — mentioned in `CLAUDE.md` rule #9 because they're useful once a codebase has multiple features. Write them incrementally as the project grows; don't seed empty ones.
+| Place | Auto-loaded | Use for |
+|---|---|---|
+| Global work style + protocol (here) | Every session | How we work, in any app |
+| Project `CLAUDE.md` | Every session in that repo | What is different about this app |
+| Project `DECISIONS.md` | On demand | Why each technical choice was made; standing authorisations |
+| Harness memory (`~/.claude/projects/<slug>/memory/`) | Index every turn | Corrections and validated approaches for this user on this project — never app status |
+| Knowledge Base lessons (repo root) | On demand via the `kb` agent | Transferable lessons, `*kbdoc`-tagged and written after `/end` |
 
 ## Provenance
 
-Extracted from a Tauri 2 + Cloudflare Worker desktop app on 2026-04-20 after a project-wide audit consolidated the conventions into a stable shape. The source project's exact path is environment-specific; treat this template as the canonical version and resync upstream conventions when they meaningfully evolve.
-
-**Resync 2026-07-24:** ported the source project's drift-audit fixes — `docs/SESSION_LEDGER.md` (moment-of-event open-item ledger), `/end` Step 1d ledger reconciliation, the re-read-CURRENT_STATE-from-disk concurrency guard, ~300-char handoff-line cap, the post-`/end` mini-wrap rule, and ledger injection in the SessionStart hook + `/start` cross-check.
+Extracted 2026-04-20 from a Tauri 2 + Cloudflare desktop app; resynced 2026-07-24 (ledger, drift-audit fixes). **Restructured 2026-09-08** into the global/project layers: work style and protocol moved out of the per-project copies into imports; scripts made generic behind `protocol.json`; parallel-track rules, ledger caps, content-based secret scan, template-drift check, and the installer added. The source projects' later evolutions (build guard at `/end`, spine-cell brevity, secret scan) were folded in at the same time.

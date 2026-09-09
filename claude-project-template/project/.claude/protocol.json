@@ -1,0 +1,35 @@
+{
+  "$comment": "Per-project settings for the session protocol. EDIT THIS FILE, never the scripts in .claude/scripts/ — they are byte-identical across projects and checked against the template. Every key is optional; missing keys fall back to the defaults shown here. Keys starting with $ are comments.",
+
+  "$spine_heading": "Case-insensitive text of the ROADMAP.md heading that opens the status spine table. The start hook injects everything from that heading to the next '## '.",
+  "spine_heading": "status at a glance",
+
+  "$check_command": "Shell command run at /end Step 0c BEFORE anything is committed (build freshness, contract drift, typecheck). Non-zero exit stops the wrap. Empty = skipped. Example: \"pnpm check\".",
+  "check_command": "",
+
+  "$audit_command": "Shell command run at session start; mentioned only if it reports findings. Example: \"pnpm audit --prod\" or \"cargo audit\". Empty = skipped.",
+  "audit_command": "",
+
+  "$push_policy": "\"ask\" = never push without asking (default). \"standing\" = session-end pushes are pre-authorised so work can continue from another machine — record that authorisation in DECISIONS.md first. Force pushes always need per-instance confirmation regardless.",
+  "push_policy": "ask",
+
+  "$secret_scan": "Run .claude/scripts/scan-secrets.py at /end Step 0c. Content-based; .gitignore is only a blocklist.",
+  "secret_scan": true,
+
+  "$index_skip_prefixes": "Project-relative path prefixes (POSIX) the codebase-index hook ignores, on top of the built-in ones (.claude/, node_modules/, dist/, build/, target/, .next/, __pycache__/). Put generated code here, e.g. \"apps/desktop/src-tauri/gen/\".",
+  "index_skip_prefixes": [],
+
+  "$ledger": "Size rules for docs/SESSION_LEDGER.md. item_max_chars is a HARD cap on one item's text (the start hook truncates over it); open_soft_max is a target count reported at /end; stale_after_days lists old open items at /end as route-or-close; prune_closed_after_days removes struck lines at /end (history lives in git).",
+  "ledger": {
+    "item_max_chars": 600,
+    "open_soft_max": 30,
+    "stale_after_days": 45,
+    "prune_closed_after_days": 7
+  },
+
+  "$tracks": "Parallel tracks — two sessions working on two VERSIONS of the app (e.g. desktop and mobile) in the same checkout on the same branch. Empty = single track (ledger IDs are L-N, no ownership rules). With 2+ tracks: each session declares its track at start, mints IDs with its own prefix (D-1, M-1 — independent counters, so no collisions), edits only its own 'owns' paths plus shared_paths, and the stop hook tolerates the OTHER track's uncommitted files only inside that track's owns. Example: [{\"name\": \"desktop\", \"prefix\": \"D\", \"owns\": [\"apps/desktop/\", \"packages/frontend/\"]}, {\"name\": \"mobile\", \"prefix\": \"M\", \"owns\": [\"platforms/android/\"]}]",
+  "tracks": [],
+
+  "$shared_paths": "Paths every track may edit (shared packages, the server, docs). A change here must be announced with a ledger line tagged →all or →<other track> saying what changed and what the other side must do (rebuild, redeploy, run a migration). Example: [\"packages/core/\", \"apps/server/\"]",
+  "shared_paths": []
+}

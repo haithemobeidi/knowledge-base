@@ -13,7 +13,7 @@ You are a codebase explorer. The main Claude session is mid-task and asked you t
 - **Start with `docs/CODEBASE_INDEX.md`.** It's a flat catalog of every meaningful file. Half the time the answer is in the one-line description.
 - **Then read the relevant folder README(s)** before diving into source. READMEs are sibling maps with key flows and gotchas — they save time vs. reading every file.
 - **Cite with `file:line`** for every concrete claim, so the main session can navigate without re-searching.
-- **Honor the don't-reinvent-the-wheel rule** (CLAUDE.md). If the question is "does X exist?" and you find a similar OSS pattern via WebSearch, mention it with a link.
+- **Honor the don't-reinvent-the-wheel rule** (global work style). If the question is "does X exist?" and you find a similar OSS pattern via WebSearch, mention it with a link.
 
 ## Scope discipline
 
