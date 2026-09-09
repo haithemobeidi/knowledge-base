@@ -6,20 +6,20 @@ Reusable patterns and lessons learned from vibe coding projects. Reference these
 
 ## Browsing the KB visually
 
-[`kb-browser.html`](./kb-browser.html) is a static, self-contained UI over every lesson below — open it by double-clicking it, no server needed. It gives you:
+Two ways to read this repo as a site, both generated from the same template:
 
-- **Facets** for `kind` (gotcha / pattern / howto / playbook / architecture / …) and for `stack` tags grouped into Languages, Frameworks & Libraries, Platforms & Runtimes, Cloud & Backend, Data & Sync, Auth & Security, Integrations, Reliability & Perf, and Process & Meta (unrecognized tags fall into "Other" rather than breaking anything).
-- **Multi-facet filtering** — selections within a group are OR'd (e.g. Rust *or* TypeScript), selections across groups are AND'd (e.g. Rust *and* Auth & Security).
-- **Full-text search**, a **staleness indicator** per the freshness rule below, and sort by recency/title/kind.
-- A **detail view** that renders the full lesson (headers, code blocks, tables, lists) via a small built-in markdown renderer.
+- **Hosted:** https://claude.ai/code/artifact/35ae6f8b-526b-4e11-926c-c2015536148e (private to the account; share from the page's menu). Three panes: filters, a ledger of lessons with kind and freshness at a glance, and a reading column. A second collection, **Process**, holds the template docs (global rules, commands, project skeleton, migration, this repo's decisions).
+- **Local, offline:** [`kb-browser.html`](./kb-browser.html) — double-click it, no server. Same site.
 
-It's generated, not hand-written. After adding or editing a lesson, regenerate it:
+Both are **generated**. After adding or editing a lesson or a template doc:
 
 ```
 python build-kb-browser.py
 ```
 
-The generator (`build-kb-browser.py`) parses each lesson's frontmatter and pulls its one-liner from this README's Lessons list, then embeds the dataset as JSON into `kb-browser.template.html` to produce `kb-browser.html`. **Edit the template, not the generated file** — `kb-browser.html` gets overwritten every run.
+That rewrites `kb-browser.html` (commit it) and `kb-browser.artifact.html` (gitignored). To refresh the hosted page, publish `kb-browser.artifact.html` with the Artifact tool, passing the URL above as `url` so it updates in place instead of creating a second page. **Edit `kb-browser.template.html`, never the generated files.** Lessons need frontmatter (`stack`, `kind`, `last_verified`) to appear; their one-liner comes from the Lessons list below. A `stack` tag missing from the generator's `TAG_GROUPS` lands in the "Other" facet rather than breaking anything; add a mapping once a tag recurs.
+
+Keyboard: `/` search, `j` / `k` next and previous, `Esc` back to the list on a phone. Every lesson has a link (`#lesson/<file>`), and cross-references between lessons resolve inside the site.
 
 ---
 

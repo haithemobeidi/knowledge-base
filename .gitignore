@@ -16,3 +16,6 @@ Thumbs.db
 .claude/pending-index-updates.txt
 .claude/worktrees/
 __pycache__/
+
+# Generated fragment for publishing the site as a hosted page (regenerate with build-kb-browser.py)
+kb-browser.artifact.html
