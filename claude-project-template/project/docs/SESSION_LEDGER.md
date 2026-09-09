@@ -35,9 +35,11 @@
 >   **Multi-track** (tracks declared in `protocol.json`): each track mints with
 >   its own prefix and its own counter — `D-1, D-2, …` and `M-1, M-2, …` — so
 >   two sessions can append at once without colliding. The prefix says who
->   WROTE it. A tag right after the date says who ACTS on it: `→mobile`,
->   `→desktop`, or `→all`; no tag = the writer's own track. Legacy `L-` items
->   keep their numbers forever. If a collision ever lands anyway, renumber the
+>   WROTE it. A tag right after the ID says who ACTS on it: `→mobile`,
+>   `→desktop`, or `→all` (`D-2 →mobile (2026-09-08) …`; also accepted after
+>   the date); no tag = the writer's own track. Legacy `L-` items keep their
+>   numbers forever and were tagged once at migration. If a collision ever
+>   lands anyway, renumber the
 >   later-referenced item and keep the alias in the surviving line.
 
 <!-- Items start here. Shapes:
@@ -49,6 +51,6 @@ Single-track:
 
 Multi-track:
 - [ ] D-1 (2026-09-08) Verify sync status stays steady through a full copy-up — done when the hub mark reads "Backing up" once for the whole run.
-- [ ] D-2 (2026-09-08) →mobile Server v134 deployed with the wipe stamp (migration 0030); phone must re-sync before testing wipe-aftermath copy.
-- [ ] M-1 (2026-09-08) →all packages/core: `Entry.milestone` is now nullable — rebuild core and re-run the drift guard before the next commit on either track.
+- [ ] D-2 →mobile (2026-09-08) Server v134 deployed with the wipe stamp (migration 0030); phone must re-sync before testing wipe-aftermath copy.
+- [ ] M-1 →all (2026-09-08) packages/core: `Entry.milestone` is now nullable — rebuild core and re-run the drift guard before the next commit on either track.
 -->

@@ -84,7 +84,7 @@ Keep it under ~150 lines. It is the only prose file edited per project.
 | `ledger.open_soft_max` | `30` | `/end` reports when exceeded and offers triage |
 | `ledger.stale_after_days` | `45` | Older open items listed at `/end` as route-or-close |
 | `ledger.prune_closed_after_days` | `7` | Struck lines older than this are pruned |
-| `tracks` | `[]` | Parallel tracks: `{name, prefix, owns[]}` each |
+| `tracks` | `[]` | Parallel tracks: `{name, prefix, owns[], aliases[]}` each (aliases = words your old docs use for it, e.g. `android` for `mobile`) |
 | `shared_paths` | `[]` | Paths every track may edit, with an announcement |
 
 ## Parallel tracks — desktop and mobile side by side
@@ -92,7 +92,7 @@ Keep it under ~150 lines. It is the only prose file edited per project.
 Two sessions, one checkout, one branch, on purpose: they see each other's work instantly and the mobile build tests against the server the desktop track deploys. The rules that make it safe (full text in `global/PROTOCOL.md`):
 
 - Each session **declares its track** before touching anything; the start hook gates on it.
-- **IDs are prefixed per track with independent counters** (`D-12`, `M-3`), so two writers never collide. A tag `→mobile` / `→all` after the date says who acts on an item.
+- **IDs are prefixed per track with independent counters** (`D-12`, `M-3`), so two writers never collide. A tag `→mobile` / `→all` right after the ID says who acts on an item; legacy items are tagged once at migration.
 - Each track **edits only its owned paths plus shared paths**; shared changes are announced with a tagged ledger line; deploy state lives in CURRENT_STATE's Shared block.
 - The other session's uncommitted files are **left alone and reported**; the stop hook tolerates them only inside that track's owned paths; `git add -A` is forbidden.
 - **A push publishes the whole branch** — commits that are not yours are named in the report.

@@ -45,10 +45,13 @@ from protocol_config import (  # noqa: E402
     prefix_map,
     project_dir,
     template_root,
+    track_aliases,
     track_names,
 )
 
-ITEM_RE = re.compile(r"^- \[( |x|-)\] ([A-Za-z]{1,4})-(\d+)\s*\((\d{4}-\d{2}-\d{2})")
+ITEM_RE = re.compile(
+    r"^- \[( |x|-)\] ([A-Za-z]{1,4})-(\d+)\s*(?:(?:→|->)\s*[\w-]+\s*)?\((\d{4}-\d{2}-\d{2})"
+)
 
 
 def run(cmd: list[str], cwd: str, timeout: int = 5) -> tuple[int, str]:
@@ -105,17 +108,26 @@ def ledger_blocks(text: str) -> tuple[list[str], list[list[str]]]:
     return header, blocks
 
 
-def item_tag(first_line: str, names: list[str]) -> str | None:
-    """A →track / →all tag near the start of the ID line, only for declared names."""
-    alts = "|".join(re.escape(n) for n in names + ["all"])
-    m = re.search(r"(?:→|->)\s*(" + alts + r")\b", first_line[:160], re.IGNORECASE)
+def item_tag(first_line: str, aliases: dict[str, str]) -> str | None:
+    """A →track / →all tag on the ID line, only for declared names or aliases.
+
+    Two positions count, and nothing else does (an arrow inside the item's
+    prose must not re-route it):
+      1. right after the ID:            `- [ ] L-423 →mobile (2026-08-29, …)`   (canonical)
+      2. right after the date paren:    `- [ ] D-2 (2026-09-08) →mobile …`
+    Legacy ledgers can have very long date parentheses, so position 2 is found
+    from the first ')' rather than a fixed prefix."""
+    alts = "|".join(re.escape(a) for a in list(aliases) + ["all"])
+    s = first_line.lstrip()
+    m = re.match(r"- \[.\] [A-Za-z]{1,4}-\d+\s*(?:→|->)\s*(" + alts + r")\b", s, re.IGNORECASE)
+    if not m:
+        close = s.find(")")
+        if close >= 0:
+            m = re.match(r"\)\s*(?:→|->)\s*(" + alts + r")\b", s[close:], re.IGNORECASE)
     if not m:
         return None
     hit = m.group(1).lower()
-    for n in names:
-        if n.lower() == hit:
-            return n
-    return "all"
+    return "all" if hit == "all" else aliases.get(hit)
 
 
 def truncate(block_text: str, cap: int) -> tuple[str, bool]:
@@ -132,6 +144,7 @@ def open_ledger_view(text: str, cfg: dict) -> dict:
     stale_days = int(cfg["ledger"]["stale_after_days"])
     today = _dt.date.today()
     names = track_names(cfg)
+    aliases = track_aliases(cfg)
     pmap = prefix_map(cfg)
     open_blocks = [b for b in blocks if b[0].lstrip().startswith("- [ ]")]
     closed = len(blocks) - len(open_blocks)
@@ -155,7 +168,7 @@ def open_ledger_view(text: str, cfg: dict) -> dict:
         truncated += int(was_cut)
         if multi_track(cfg):
             writer = pmap.get(m.group(2).upper()) if m else None
-            tag = item_tag(first, names)
+            tag = item_tag(first, aliases)
             if tag == "all":
                 key = "SHARED (→all)"
             elif tag:
@@ -397,6 +410,26 @@ def main() -> None:
                             if len(fields) >= 3 and fields[1].lower() == name.lower():
                                 last = ln
                                 break
+                        if last is None:
+                            # Legacy lines (before the track field existed) name the track in
+                            # free text, e.g. "(120th, desktop)" or "Android (86th)". Match the
+                            # track name or any declared alias so the first post-migration
+                            # cross-check has something to check against.
+                            # Only the AREA field counts, and only where the name is used as a
+                            # label — followed by "(", ",", ";", ")", "track", or the end —
+                            # so "(120th, desktop; Android session concurrent)" matches desktop,
+                            # not mobile.
+                            words = [a for a, n in track_aliases(cfg).items() if n == name]
+                            pat = (
+                                r"(?:^|[\s(,;/])(?:" + "|".join(re.escape(w) for w in words)
+                                + r")(?=\s*(?:\(|,|;|\)|track\b|$))"
+                            )
+                            for ln in reversed(entries):
+                                fields = [f.strip() for f in ln.split("|")]
+                                area = fields[1] if len(fields) >= 3 else ln
+                                if re.search(pat, area, re.IGNORECASE):
+                                    last = ln + "   ⟵ matched by text (legacy line, no track field)"
+                                    break
                         per.append(f"- **{name}:** {last or '(no handoff line yet for this track)'}")
                     parts.append("\n### Last handoff line PER TRACK (cross-check against YOUR track's line)\n" + "\n".join(per) + "\n")
         except OSError:

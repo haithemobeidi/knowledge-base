@@ -105,7 +105,8 @@ def load_config(proj: str | None = None) -> tuple[dict, bool]:
         name = str(t["name"]).strip()
         prefix = str(t.get("prefix") or name[:1]).strip().upper()
         owns = [_norm_prefix(str(p)) for p in (t.get("owns") or []) if str(p).strip()]
-        tracks.append({"name": name, "prefix": prefix, "owns": owns})
+        aliases = [str(a).strip() for a in (t.get("aliases") or []) if str(a).strip()]
+        tracks.append({"name": name, "prefix": prefix, "owns": owns, "aliases": aliases})
     cfg["tracks"] = tracks
     cfg["shared_paths"] = [_norm_prefix(str(p)) for p in (cfg.get("shared_paths") or []) if str(p).strip()]
     return cfg, exists
@@ -122,6 +123,19 @@ def prefix_map(cfg: dict) -> dict[str, str]:
 
 def track_names(cfg: dict) -> list[str]:
     return [t["name"] for t in cfg.get("tracks") or []]
+
+
+def track_aliases(cfg: dict) -> dict[str, str]:
+    """lower-cased name-or-alias → canonical track name. The name itself is
+    always included, so `{"android": "mobile", "mobile": "mobile"}` for a
+    track named mobile with alias android. Used for →tags and for matching
+    legacy handoff lines that name the track in prose."""
+    out: dict[str, str] = {}
+    for t in cfg.get("tracks") or []:
+        out[t["name"].lower()] = t["name"]
+        for a in t.get("aliases") or []:
+            out[a.lower()] = t["name"]
+    return out
 
 
 def track_of_path(cfg: dict, rel_posix: str) -> tuple[str, str | None]:

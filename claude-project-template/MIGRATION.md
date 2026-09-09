@@ -26,7 +26,7 @@ Copy from `<KB>/claude-project-template/project/`:
 | `index_skip_prefixes` | old `track-new-file.py` SKIP_PREFIXES additions + old `end.md` Step 1b ignore list |
 | `spine_heading` | the string the old `session-start-context.py` matched (default `status at a glance` matches "📊 v1 status at a glance" too) |
 | `ledger.*` | defaults, unless the user wants different caps |
-| `tracks` / `shared_paths` | from the repo layout — confirm with the user: which top-level paths each version of the app owns, and which are shared (core packages, server, docs) |
+| `tracks` / `shared_paths` | from the repo layout — confirm with the user: which top-level paths each version of the app owns, and which are shared (core packages, server, docs). Give each track the `aliases` your existing handoff lines and ledger items use for it (e.g. `"mobile"` with aliases `["android", "phone"]`), so the start hook can match legacy lines by text from day one. |
 
 ## 2 — Remove the project copies of what is now global
 
@@ -48,6 +48,7 @@ Use `project/CLAUDE.md` as the shape. Keep: identity, locked stack, layout, how 
 
 - Replace the header block of `docs/SESSION_LEDGER.md` with the template's (worthiness test, size cap, ID scheme). Items below the header are untouched.
 - **Multi-track:** from now on mint with the track prefixes and independent counters (`D-1`, `M-1`). Legacy `L-` IDs stay forever. Add a one-line note under the header: "Items before <date> use the shared `L-` counter; see the ID rule above."
+- **Multi-track — tag every open legacy item once (this is what makes the old items per-track).** The start hook groups items by ID prefix or by a `→track` tag; untagged `L-` items land in "unassigned" for BOTH sessions. So, for each open `[ ]` line, insert `→desktop`, `→mobile`, or `→all` **right after the ID** (`- [ ] L-423 →mobile (2026-08-29, …)`), touching nothing else on the line. Propose the tag from the item's own text (mentions of the mobile platform, "phone", the store, "/Android" → `→mobile`; the desktop app, its release numbers, "/desktop" → `→desktop`; "both clients", "parity", "cross-client", server or shared-schema changes → `→all`), then show the user ONE table (ID · first 80 chars · proposed tag) and let them correct it before writing. Ambiguous → `→all`, never guess a single track. Closed lines are not tagged. Nothing else about the item changes, so every open loop keeps its place.
 - **One-time triage** (the part the caps make necessary): for each open item over `item_max_chars`, move its analysis to the bug doc, the backlog, `docs/notes/<ID>.md`, or a DECISIONS entry, and cut the ledger line down to the loop + a pointer. Then, with the user in one sitting, route or close every item older than `stale_after_days` and everything that fails the worthiness test. A plain-language review lens (one table per "needs your decision / needs your hands / I can just do it") works well; delete it when done.
 
 ## 5 — State docs
