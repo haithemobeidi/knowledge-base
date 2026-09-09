@@ -27,11 +27,16 @@ project/docs/*.md, DECISIONS.md, .gitignore.template, .mcp.json.template
 
 ## Install the global layer (once per machine)
 
+From the Knowledge Base clone (any folder name, any machine — the script finds its own location):
+
 ```bash
-python "<KB>/claude-project-template/install-global.py"          # install / refresh
-python "<KB>/claude-project-template/install-global.py" --check  # is it current?
-python "<KB>/claude-project-template/install-global.py" --uninstall
+git pull --ff-only
+python claude-project-template/install-global.py            # install / refresh
+python claude-project-template/install-global.py --check    # is it current?  (prints OK)
+python claude-project-template/install-global.py --uninstall
 ```
+
+New machine from zero: clone the KB repo (`github.com/haithemobeidi/knowledge-base`), `cd` into it, run the two commands above. That is the entire setup.
 
 It writes a managed block into `~/.claude/CLAUDE.md` (two `@import` lines pointing at this folder, plus the KB path) and copies `start.md` / `end.md` into `~/.claude/commands/`. Anything else in `~/.claude/CLAUDE.md` is left alone. Restart open sessions afterwards. **After each `git pull` of the Knowledge Base, rerun it** — the imports are already live, but the command copies are not.
 

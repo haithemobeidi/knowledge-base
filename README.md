@@ -23,11 +23,30 @@ The generator (`build-kb-browser.py`) parses each lesson's frontmatter and pulls
 
 ---
 
-## Agent instructions — setting up a new project
+## Start here — three entry points (human or AI agent)
 
-> **If you are an AI agent (Claude Code or similar)** and the user says "copy the KB over", "set this project up with the template", "bootstrap this project from the Knowledge Base", or anything equivalent: follow the **Bootstrap** procedure in [`claude-project-template/README.md`](./claude-project-template/README.md) exactly. Do not improvise. In short: install the global layer on this machine (`install-global.py`), copy **only** `claude-project-template/project/` into the new repo, fill `CLAUDE.md` and `.claude/protocol.json`, verify the hooks fire.
->
-> Do **not** copy the lesson files, `DECISIONS.md`, `references.md`, or this README into the project. Lessons are pulled in on demand when the work maps to one (the `kb` agent does this), never auto-loaded.
+Everything below works from **this folder** (the Knowledge Base clone). No paths to look up: the installer finds its own location, and the template is `claude-project-template/` right here.
+
+> **If you are an AI agent (Claude Code or similar):** match the user's request to one of the three rows and follow that file exactly. Do not improvise, do not read the lesson files unless the work maps to one.
+
+| The user says… | Do this | Full procedure |
+|---|---|---|
+| "set up this machine", "install the global rules", "new laptop", or a session in any project printed **GLOBAL RULES NOT INSTALLED** | `git pull --ff-only` here, then `python claude-project-template/install-global.py`, then restart open Claude Code sessions. Re-run the same command after every future pull of this repo. | [`claude-project-template/README.md`](./claude-project-template/README.md) → "Install the global layer" |
+| "copy the KB over", "bootstrap this project", "set this project up with the template" | Check the machine first (`python claude-project-template/install-global.py --check`), then copy **only** `claude-project-template/project/` into the new repo and fill `CLAUDE.md` + `.claude/protocol.json`. | [`claude-project-template/README.md`](./claude-project-template/README.md) → "Bootstrap a new project" |
+| "migrate <project> to the global protocol", "port the new protocol into <project>" | One session, only after the user confirms no other session is open in that checkout. | [`claude-project-template/MIGRATION.md`](./claude-project-template/MIGRATION.md) |
+
+**Setting up a second machine, the whole thing:**
+
+```bash
+git clone https://github.com/haithemobeidi/knowledge-base.git "~/Documents/Knowledge Base"   # or wherever; the folder name doesn't matter
+cd "~/Documents/Knowledge Base"
+python claude-project-template/install-global.py
+python claude-project-template/install-global.py --check     # must print OK
+```
+
+That writes two import lines into `~/.claude/CLAUDE.md` (pointing at this clone, so a `git pull` here updates the rules live) and copies `/start` + `/end` into `~/.claude/commands/`. Nothing else is needed on the machine. Projects carry their own hook scripts, so a fresh clone of any project is protected the moment the global layer exists.
+
+Do **not** copy the lesson files, `DECISIONS.md`, `references.md`, or this README into a project. Lessons are pulled in on demand when the work maps to one (the `kb` agent does this), never auto-loaded.
 
 ---
 
