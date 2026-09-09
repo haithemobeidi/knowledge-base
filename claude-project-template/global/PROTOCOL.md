@@ -13,7 +13,7 @@ This file is the **single source of truth** for how sessions start, run, and end
 
 Every rule here traces to a measured failure on a real project:
 
-1. **The codebase index drifted silently** because updating it relied on discipline at the worst moment (end of session, context full). → Enforced by a hook + a mandatory `/end` gate.
+1. **The codebase index drifted silently** because updating it relied on discipline at the worst moment (end of session, context full), and its one escape hatch ("skip if no major changes") was taken even when major changes existed. → Enforced by a hook + a mandatory `/end` gate. General lesson: a protocol step with a discretionary skip clause is not a step.
 2. **Overlapping protocol documents drifted apart.** → One protocol, one copy, imported everywhere.
 3. **Heavy end-session ceremony got skipped.** → Automation does the reading; the human-visible part is a 4-line report.
 4. **End-of-session recall lost facts** (a passed test vanished from a wrap; shipped work sat listed as open; the same work was recorded twice). → The ledger is written at the moment of the event, and post-wrap work gets a delta-only mini-wrap.
@@ -79,7 +79,7 @@ Mostly automatic: the `SessionStart` hook runs the worktree guard, checks the gl
 
 ## During the session
 
-**Code quality** (stack-specific rules live in the project file; these hold everywhere): files do one thing, 500-line soft cap and 800 hard, propose splits before 500; DRY at 3+ uses (2 only when the shape is certain and drift has real cost); no `utils/` dumping grounds; comments explain why; no premature abstractions.
+**Code quality** (stack-specific rules live in the project file; these hold everywhere): files do one thing, 500-line soft cap and 800 hard, propose splits before 500; DRY at 3+ uses (2 only when the shape is certain AND drift has real cost — when the abstraction might be wrong, duplication is cheaper than the wrong abstraction); group by feature, not by type — no `utils/` or `helpers/` dumping grounds; comments explain why; no premature abstractions.
 
 **Git:** commit each verified pause-point, never one big wrap commit. Never commit without the user confirming the feature works. Push per `push_policy` (`ask` unless the project set `standing` and recorded it in DECISIONS.md). Stage explicit paths — never `git add -A`.
 
@@ -124,7 +124,7 @@ Declared in `protocol.json` → `tracks` (name, ID prefix, owned paths) and `sha
 4. Commit `Session: …` (with `(track)` if any); push per policy; **clean-tree guarantee** — categorise every remaining dirty path; confirm the mainline is published.
 5. Report: accomplished / next / watch / open items (+ any commits pushed that were not yours).
 
-**Between sessions:** `/clear`, new session, the hook does the rest. Do not `/start` in the session that just ran `/end`.
+**Between sessions:** `/clear`, new session, the hook does the rest. Do not `/start` in the session that just ran `/end`. If one small follow-up is still coming, do not `/end` yet — wrap once at the real stopping point (the mini-wrap below is for work that arrives *after* a wrap, not a licence to wrap early).
 
 **Post-wrap work → mini-wrap (non-negotiable):** disposition/append ledger lines → ONE delta-only handoff line → CURRENT_STATE only if NEXT ACTION or build status changed → `Session followup:` commit, push per policy, clean tree. Never a second full re-summary.
 

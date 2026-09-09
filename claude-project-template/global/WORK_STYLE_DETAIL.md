@@ -70,8 +70,8 @@ UI-sensitive work needs live testing. Never build a whole sub-phase and hand bac
 
 **Mandatory steps:**
 
-1. **Declare pause-points before writing any code for a sub-phase.** The first message of the sub-phase lists them under `**Pause-points for this milestone:**`, each a one-line click moment: `Pause A: form renders, can submit a name-only entry and see it in the grid`. Default 2–4 per sub-phase. Plain letters, continuous across mock and implementation blocks (mocks A–C, code D–F). Never Greek.
-2. **Always-count triggers** — stop even if undeclared: a new command/IPC lands end-to-end; a form first renders with a working field; a migration runs against the live DB; a new screen becomes reachable; the first end-to-end happy path works; the first user-visible error surfaces.
+1. **Declare pause-points before writing any code for a sub-phase.** The first message of the sub-phase lists them under `**Pause-points for this milestone:**`, each a one-line click moment: `Pause A: form renders, can submit a name-only entry and see it in the grid`. Default 2–4 per sub-phase. Plain letters, continuous across mock and implementation blocks (mocks A–C, code D–F). Never Greek. **Zero pause-points is a red flag:** if none come to mind, the work is either invisible (skip the rule) or not decomposed enough.
+2. **Always-count triggers** — stop even if undeclared: a new command/IPC lands end-to-end; a form first renders with a working field; a migration runs against the live DB; a new screen becomes reachable; the first end-to-end happy path works; the first user-visible error surfaces. Blowing through one is a protocol violation worth flagging mid-session, not a judgment call.
 3. **Stop and hand off** with this exact shape, in the turn-final message:
 
    ```
@@ -175,7 +175,7 @@ The flip side of prior art: pull knowledge in from OSS, push what we learn out s
 
 **What qualifies** (all three): transferable beyond this app; non-obvious (cost real time, or the obvious approach was wrong); durable (a structural property, not a bug upstream fixes next week — a long-lived upstream gap qualifies, dated).
 
-**Dead ends count** and are often the most valuable: "here is how to recognise it, here is what looks promising but measurably doesn't work, here is the pragmatic call until upstream moves."
+**Dead ends count** and are often the most valuable: "here is how to recognise it, here is what looks promising but measurably doesn't work, here is the pragmatic call until upstream moves." A dead-end article states three things explicitly: what was *measured* not to work (vs. merely assumed), the blocking condition, and what would make it worth revisiting.
 
 **Before writing: `git pull --ff-only` the KB, always.** Nothing in a project's session lifecycle pulls it; the local clone is stale by default and a stale clone does not look broken, it looks like a smaller KB. Then check for an existing article to **extend** rather than a new one to write — one file beats two half-files. Commit and push the KB in its own repo.
 
