@@ -68,8 +68,8 @@ The **"status at a glance" spine table in `ROADMAP.md`** is the sole answer to "
 
 Mostly automatic: the `SessionStart` hook runs the worktree guard, checks the global rules are installed, fetches origin, and injects the state docs plus the cross-check directive. `/start` exists for when the hook did not fire. In order:
 
-0. **Worktree guard** — never work from `.claude/worktrees/` or a `claude/*` branch.
-0.5 **Sync guard** — `git fetch` before reading any doc. Behind + clean → `git pull --ff-only`. Behind + dirty, or diverged → stop and surface. Offline → proceed, report currency as unverified. `git status` saying "up to date" without a fetch proves nothing; a stale checkout looks complete, not broken.
+0. **Worktree/branch guard** — never work from `.claude/worktrees/`, a `claude/*` branch, or a branch listed in `protocol.json` → `protected_branches` (a fork's read-only `main`).
+0.5 **Sync guard** — `git fetch` before reading any doc. Behind + clean → `git pull --ff-only`. Behind + dirty, or diverged → stop and surface. Offline → proceed, report currency as unverified. `git status` saying "up to date" without a fetch proves nothing; a stale checkout looks complete, not broken. If `upstream_ref` is set (a fork), that remote is fetched too and the drift count is **reported, never acted on** at start — catching up is a session decision at a quiet point.
 0.7 **Track gate** (multi-track repos only) — know which track this session is before reading or editing anything (see "Parallel tracks").
 1–5. Read CURRENT_STATE (your track's NEXT ACTION), the open ledger items, the last handoff lines (yours), the spine; run the working-tree check and the project's `audit_command` if set.
 6. **CROSS-CHECK (mandatory):** NEXT ACTION vs spine CURRENT vs last handoff "Next:" vs open gates. Contradiction → stop and surface; never pick one silently.
@@ -134,7 +134,7 @@ Declared in `protocol.json` → `tracks` (name, ID prefix, owned paths) and `sha
 
 | Hook | Script | Does |
 |---|---|---|
-| `SessionStart` (`startup\|resume\|clear`) | `session-start-context.py` | Worktree guard → global-install check → fetch + stale refusal → injects tracks, CURRENT_STATE, open ledger items (truncated, grouped by track), spine (bloat warning), last handoff lines (+ per track), template-drift note, cross-check / track-gate directive |
+| `SessionStart` (`startup\|resume\|clear`) | `session-start-context.py` | Worktree/branch guard (`protected_branches`) → global-install check → fetch + stale refusal → upstream drift count (`upstream_ref`) → injects tracks, CURRENT_STATE, open ledger items (truncated, grouped by track), spine (bloat warning), last handoff lines (+ per track), template-drift note, cross-check / track-gate directive |
 | `PostToolUse` (`Write\|Edit`) | `track-new-file.py` | Queues unindexed paths (skip prefixes from `protocol.json`) |
 | `Stop` | `stop-clean-tree-check.py` | Blocks a stop only when a Session commit just landed and files this track is responsible for are still dirty |
 

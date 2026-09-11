@@ -24,6 +24,7 @@ Copy from `<KB>/claude-project-template/project/`:
 | `audit_command` | old `start.md` audit step (e.g. `pnpm audit --prod`) |
 | `push_policy` | old `PROTOCOL.md` Step 4 / `DECISIONS.md` standing-push entry → `standing`; else `ask` |
 | `index_skip_prefixes` | old `track-new-file.py` SKIP_PREFIXES additions + old `end.md` Step 1b ignore list |
+| `protected_branches` / `upstream_ref` | a fork's old start hook: the branch it refused (`main`) and the second remote it fetched (`upstream/main`) |
 | `spine_heading` | the string the old `session-start-context.py` matched (default `status at a glance` matches "📊 v1 status at a glance" too) |
 | `ledger.*` | defaults, unless the user wants different caps |
 | `tracks` / `shared_paths` | from the repo layout — confirm with the user: which top-level paths each version of the app owns, and which are shared (core packages, server, docs). Give each track the `aliases` your existing handoff lines and ledger items use for it (e.g. `"mobile"` with aliases `["android", "phone"]`), so the start hook can match legacy lines by text from day one. |

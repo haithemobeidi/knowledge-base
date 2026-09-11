@@ -13,6 +13,12 @@
   "$push_policy": "\"ask\" = never push without asking (default). \"standing\" = session-end pushes are pre-authorised so work can continue from another machine — record that authorisation in DECISIONS.md first. Force pushes always need per-instance confirmation regardless.",
   "push_policy": "ask",
 
+  "$protected_branches": "Branches a session must never commit to, e.g. [\"main\"] in a fork where main is a read-only mirror of upstream. The start hook trips the branch guard on them exactly as it does for a worktree. Empty = only worktrees and claude/* branches are guarded.",
+  "protected_branches": [],
+
+  "$upstream_ref": "A remote-tracking ref this branch is periodically brought up to date with, e.g. \"upstream/main\" in a fork. The start hook fetches that remote and reports how many commits the ref has that HEAD lacks — reported, never acted on at start (merge or rebase is a session decision at a quiet point, per the project's DECISIONS.md). The statusline shows `upstream +N`. Empty = off.",
+  "upstream_ref": "",
+
   "$secret_scan": "Run .claude/scripts/scan-secrets.py at /end Step 0c. Content-based; .gitignore is only a blocklist.",
   "secret_scan": true,
 

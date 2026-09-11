@@ -4,8 +4,9 @@ SessionStart hook: loads the session context so the user never types /start.
 
 Order of operations (each one exists because skipping it once cost real time):
 
-1. Worktree guard — refuse to work from a `.claude/worktrees/` checkout or a
-   `claude/*` branch.
+1. Worktree/branch guard — refuse to work from a `.claude/worktrees/` checkout,
+   a `claude/*` branch, or a branch listed in `protected_branches` (a fork's
+   read-only `main`).
 2. Global-install check — the rules that govern every project live in the
    Knowledge Base and are imported from `~/.claude/CLAUDE.md`. If that import
    is missing on this machine, say so loudly: the session would otherwise run
@@ -13,6 +14,9 @@ Order of operations (each one exists because skipping it once cost real time):
 3. Sync guard — `git fetch` and refuse to inject state docs from a checkout
    that is behind origin. Stale docs are self-consistent, so nothing
    downstream can catch them.
+3b. Upstream drift — if `upstream_ref` is set (a fork), fetch that remote too
+   and report how many commits the ref has that HEAD lacks. Reported only:
+   catching up rewrites or merges the branch, which is a session decision.
 4. Inject: declared tracks (if any), CURRENT_STATE.md, the OPEN ledger items
    (each truncated to the configured cap, grouped by track), the ROADMAP
    status spine (with a warning for bloated cells), the last handoff lines
@@ -86,6 +90,17 @@ def remote_state(proj: str) -> tuple[int, int, bool, bool]:
     return behind, ahead, rc == 0 and bool(porcelain), fetch_rc == 0
 
 
+def upstream_state(proj: str, ref: str) -> tuple[int, str, bool]:
+    """(commits on ref not in HEAD, latest subject on ref, fetch_ok). Fetches the
+    ref's remote (the part before the first "/"); never merges or rebases."""
+    remote = ref.split("/", 1)[0]
+    fetch_rc, _ = run(["git", "fetch", remote, "--prune"], proj, timeout=20)
+    rc, count = run(["git", "rev-list", "--count", f"HEAD..{ref}"], proj)
+    behind = int(count) if rc == 0 and count.isdigit() else 0
+    _, latest = run(["git", "log", "-1", "--format=%h %s (%cr)", ref], proj)
+    return behind, latest, fetch_rc == 0
+
+
 # --- Ledger ------------------------------------------------------------------
 
 def ledger_blocks(text: str) -> tuple[list[str], list[list[str]]]:
@@ -95,7 +110,17 @@ def ledger_blocks(text: str) -> tuple[list[str], list[list[str]]]:
     blocks: list[list[str]] = []
     current: list[str] | None = None
     in_items = False
+    in_comment = False
     for ln in text.splitlines():
+        # HTML comment blocks (the header's example items live in one) are
+        # never items and never injected — an example `- [ ] L-1 …` used to
+        # be counted and shown as a real open loop at every session start.
+        if in_comment:
+            in_comment = "-->" not in ln
+            continue
+        if "<!--" in ln:
+            in_comment = "-->" not in ln[ln.index("<!--"):]
+            continue
         s = ln.lstrip()
         if s.startswith("- ["):
             in_items = True
@@ -236,13 +261,20 @@ def main() -> None:
     if not cfg_exists and not state_path.exists():
         sys.exit(0)  # not a protocol project
 
-    # 1. Worktree guard — mirrors /start Step 0 so the warning is identical.
+    # 1. Worktree/branch guard — mirrors /start Step 0 so the warning is identical.
     cwd_norm = proj.replace("\\", "/")
     rc, branch = run(["git", "rev-parse", "--abbrev-ref", "HEAD"], proj)
-    if ".claude/worktrees/" in cwd_norm or (rc == 0 and branch.startswith("claude/")):
+    protected = [str(b).strip().lower() for b in cfg.get("protected_branches") or []]
+    on_protected = rc == 0 and branch.lower() in protected
+    if ".claude/worktrees/" in cwd_norm or (rc == 0 and branch.startswith("claude/")) or on_protected:
+        why = (
+            f"`{branch}` is listed in `protocol.json` → `protected_branches` and must never receive commits"
+            if on_protected
+            else "violates the workflow"
+        )
         emit(
-            "⚠️ **Worktree guard tripped at session start.** "
-            f"cwd `{proj}` on branch `{branch or '(unknown)'}` violates the workflow. "
+            "⚠️ **Worktree/branch guard tripped at session start.** "
+            f"cwd `{proj}` on branch `{branch or '(unknown)'}` — {why}. "
             "Tell the user verbatim from `/start` Step 0 and DO NOT proceed with reading state, "
             "editing files, or running other commands until they resolve it."
         )
@@ -309,6 +341,22 @@ def main() -> None:
         else "⚠️ **Could not reach origin** — the docs below are from the local checkout and their "
         "currency is UNVERIFIED. Say so in the status report.\n"
     )
+
+    # Upstream drift (forks): reported, never acted on.
+    ref = str(cfg.get("upstream_ref") or "").strip()
+    if ref:
+        up_behind, up_latest, up_ok = upstream_state(proj, ref)
+        if not up_ok:
+            parts.append(f"⚠️ Could not fetch `{ref.split('/', 1)[0]}` — upstream drift is unknown this session.\n")
+        elif up_behind == 0:
+            parts.append(f"✅ This branch contains everything on `{ref}`.\n")
+        else:
+            parts.append(
+                f"📥 **`{ref}` has {up_behind} commit(s) not in this branch** (latest: {up_latest}). "
+                "Reported only: bringing the branch up to date (merge or rebase, per the project's "
+                "DECISIONS.md) is a session decision at a quiet point, never part of session start. "
+                "State the count in the status report.\n"
+            )
 
     # Template drift (informational, one line).
     tmpl = template_root()
@@ -471,7 +519,7 @@ def main() -> None:
             "2. If they agree, give a 4-line status: where we are (phase/block **name + number** from the "
             "spine) / what last session accomplished / the single **NEXT ACTION** / open ledger items (count + "
             "gates), plus a **sync line** stating currency explicitly (fetched-and-current, or "
-            "fetch-failed-so-unverified).\n"
+            "fetch-failed-so-unverified) and, if an upstream ref is configured, its drift count.\n"
         )
     parts.append(
         "\n---\n**Action requested — session start.** The hook fetched origin and auto-loaded the state docs "

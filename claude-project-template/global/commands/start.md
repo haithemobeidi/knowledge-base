@@ -13,7 +13,7 @@ pwd
 git rev-parse --abbrev-ref HEAD
 ```
 
-If the cwd contains `.claude/worktrees/` OR the branch starts with `claude/`, **STOP IMMEDIATELY**. Do not run the later steps, read files, or edit. Report the path, the branch, and the two fixes above, and wait.
+If the cwd contains `.claude/worktrees/` OR the branch starts with `claude/` OR the branch is listed in `.claude/protocol.json` → `protected_branches` (a fork's read-only `main`), **STOP IMMEDIATELY**. Do not run the later steps, read files, or edit. Report the path, the branch, and the two fixes above, and wait.
 
 ## Step 0.3 — Global rules installed?
 
@@ -35,6 +35,8 @@ git status -sb
 | `[behind N]`, tree dirty | **STOP.** Surface both. Do not stash, do not merge. (Multi-track: the dirty files may be the other session's — say so; still the user's call.) |
 | `[ahead N, behind M]` (diverged) | **STOP.** Surface it. Never auto-merge or rebase at session start. |
 | Fetch failed (offline) | Proceed, but report currency as **unverified** in Step 7. |
+
+If `protocol.json` sets `upstream_ref` (a fork): `git fetch <its remote> --prune` and `git rev-list --count HEAD..<ref>`. Report the count in Step 7. **Never merge or rebase at session start** — that is a session decision at a quiet point, per the project's DECISIONS.md.
 
 Every file the later steps read is a tracked repo file. Reading them from a checkout that is behind origin loads a snapshot of the past, and the cross-check cannot catch it: it only tests whether the docs agree with each other, and stale docs agree perfectly. A stale checkout does not look broken; it looks complete. **Any protocol step that reads a git-backed source of truth must pull first** — this includes sibling repos a session reads (the Knowledge Base, shared config).
 
@@ -59,7 +61,7 @@ Then report, 4 lines plus a sync line (5 plus track in multi-track repos):
 - What last session accomplished (your track's)
 - The single **NEXT ACTION** — or the flagged contradiction
 - Open ledger items: N (call out gates; multi-track: yours + `→all` + unassigned)
-- **Sync:** `synced to origin @ <short-sha>`, plus `(pulled N)` or `(⚠️ fetch failed — currency unverified)`
+- **Sync:** `synced to origin @ <short-sha>`, plus `(pulled N)` or `(⚠️ fetch failed — currency unverified)`; forks add `upstream: +N` or `current`
 
 **Trust, but verify.** CURRENT_STATE is hand-written and CAN be wrong. The spine wins any status disagreement, and CURRENT_STATE gets fixed — never silently work around either. Numbers are frozen. **Do not** read every handoff or every doc.
 

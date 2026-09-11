@@ -78,6 +78,8 @@ Keep it under ~150 lines. It is the only prose file edited per project.
 | `check_command` | `""` | Run at `/end` Step 0c; non-zero stops the wrap |
 | `audit_command` | `""` | Run at start; mentioned only on findings |
 | `push_policy` | `ask` | `standing` pre-authorises session-end pushes (record it in DECISIONS.md) |
+| `protected_branches` | `[]` | Branches the start hook refuses to work on, e.g. `["main"]` in a fork whose `main` mirrors upstream |
+| `upstream_ref` | `""` | Fork only: a ref like `upstream/main`; the start hook fetches it and reports the drift count (never acts on it); the statusline shows `upstream +N` |
 | `secret_scan` | `true` | Content-based secret scan at `/end` |
 | `index_skip_prefixes` | `[]` | Extra paths the index hook ignores (generated code) |
 | `ledger.item_max_chars` | `600` | Hard cap per ledger item; the start hook truncates over it |
@@ -141,4 +143,4 @@ See [`MIGRATION.md`](./MIGRATION.md). One session, not concurrent with another s
 
 ## Provenance
 
-Extracted 2026-04-20 from a Tauri 2 + Cloudflare desktop app; resynced 2026-07-24 (ledger, drift-audit fixes). **Restructured 2026-09-08** into the global/project layers: work style and protocol moved out of the per-project copies into imports; scripts made generic behind `protocol.json`; parallel-track rules, ledger caps, content-based secret scan, template-drift check, and the installer added. The source projects' later evolutions (build guard at `/end`, spine-cell brevity, secret scan) were folded in at the same time.
+Extracted 2026-04-20 from a Tauri 2 + Cloudflare desktop app; resynced 2026-07-24 (ledger, drift-audit fixes). **Restructured 2026-09-08** into the global/project layers: work style and protocol moved out of the per-project copies into imports; scripts made generic behind `protocol.json`; parallel-track rules, ledger caps, content-based secret scan, template-drift check, and the installer added. The source projects' later evolutions (build guard at `/end`, spine-cell brevity, secret scan) were folded in at the same time. **2026-09-11** (from the first fork-with-a-device migration): `protected_branches` + `upstream_ref` for forks; the index queue is written LF-only on Windows; the ledger reader skips HTML comment blocks (the header's example items used to be counted as open).

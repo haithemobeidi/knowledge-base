@@ -84,7 +84,9 @@ def main() -> None:
         if pending.exists():
             existing = {ln.strip() for ln in pending.read_text(encoding="utf-8").splitlines() if ln.strip()}
         if rel not in existing:
-            with open(pending, "a", encoding="utf-8") as f:
+            # newline="\n": in text mode Windows would write CRLF, and every
+            # shell loop reading the queue would then see "path\r".
+            with open(pending, "a", encoding="utf-8", newline="\n") as f:
                 f.write(rel + "\n")
     except OSError:
         pass

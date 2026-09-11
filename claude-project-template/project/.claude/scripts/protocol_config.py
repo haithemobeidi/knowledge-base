@@ -47,6 +47,14 @@ DEFAULTS: dict = {
     "push_policy": "ask",
     # Run scan-secrets.py at /end Step 0c.
     "secret_scan": True,
+    # Branches a session must never work on, e.g. ["main"] in a fork whose
+    # main mirrors upstream. The start hook trips the branch guard on them.
+    "protected_branches": [],
+    # A remote-tracking ref this branch is periodically brought up to date
+    # with, e.g. "upstream/main" in a fork. The start hook fetches its remote
+    # and reports how many commits it has that HEAD lacks (never acts on it);
+    # the statusline shows "upstream +N". "" = off.
+    "upstream_ref": "",
     # Extra project-relative prefixes (POSIX form) the index tracker ignores,
     # e.g. generated icons, native gen/ dirs. Merged with DEFAULT_SKIP_PREFIXES.
     "index_skip_prefixes": [],
