@@ -135,7 +135,7 @@ Declared in `protocol.json` → `tracks` (name, ID prefix, owned paths) and `sha
 | Hook | Script | Does |
 |---|---|---|
 | `SessionStart` (`startup\|resume\|clear`) | `session-start-context.py` | Worktree/branch guard (`protected_branches`) → global-install check → fetch + stale refusal → upstream drift count (`upstream_ref`) → injects tracks, CURRENT_STATE, open ledger items (truncated, grouped by track), spine (bloat warning), last handoff lines (+ per track), template-drift note, cross-check / track-gate directive |
-| `PostToolUse` (`Write\|Edit`) | `track-new-file.py` | Queues unindexed paths (skip prefixes from `protocol.json`) |
+| `PostToolUse` (`Write\|Edit\|Bash\|PowerShell`) | `track-new-file.py` | Queues unindexed paths (skip prefixes from `protocol.json`). Write/Edit queue the touched file; a shell call queues every untracked file in the repo afterwards, because scripts, generators, heredocs and `git mv` create files the file tools never see (24 files slipped past the old `Write\|Edit` matcher in one session) |
 | `Stop` | `stop-clean-tree-check.py` | Blocks a stop only when a Session commit just landed and files this track is responsible for are still dirty |
 
 Not hooks: `validate-index.py` (phantom rows, `/end` 1c), `scan-secrets.py` (content scan, `/end` 0c; `--history` audits everything pushable), `check-template-drift.py` (resync), `statusline.py` (prompt line). All scripts are silent on failure and never edited per project — `protocol.json` carries the differences.

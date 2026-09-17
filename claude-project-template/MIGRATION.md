@@ -65,6 +65,7 @@ Use `project/CLAUDE.md` as the shape. Keep: identity, locked stack, layout, how 
 # hooks, manually
 CLAUDE_PROJECT_DIR="$(pwd)" python .claude/scripts/session-start-context.py | head -c 3000
 echo '{"tool_name":"Write","tool_input":{"file_path":"'"$(pwd)"'/tmp-hook-check.md"}}' | CLAUDE_PROJECT_DIR="$(pwd)" python .claude/scripts/track-new-file.py && cat .claude/pending-index-updates.txt
+echo x > tmp-hook-shell.md && echo '{"tool_name":"Bash","tool_input":{"command":"echo"}}' | CLAUDE_PROJECT_DIR="$(pwd)" python .claude/scripts/track-new-file.py && cat .claude/pending-index-updates.txt   # the shell half: an untracked file queued
 python .claude/scripts/check-template-drift.py        # must say up to date
 python .claude/scripts/scan-secrets.py --history      # once, on migration
 ```

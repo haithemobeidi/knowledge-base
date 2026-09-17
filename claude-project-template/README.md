@@ -55,7 +55,7 @@ If a project session starts without the global layer, the start hook says so lou
 5. **Fill `.claude/protocol.json`** — `check_command`, `audit_command`, `push_policy` (ask unless the user pre-authorises and you record it in `DECISIONS.md`), `index_skip_prefixes` (generated dirs), and `tracks` + `shared_paths` for a multi-version app.
 6. Rename `.gitignore.template` → `.gitignore` and append project ignores. If the project uses Cloudflare, rename `.mcp.json.template` → `.mcp.json` and follow its comments; otherwise delete it.
 7. `docs/CURRENT_STATE.md`: fill the NEXT ACTION line. Leave the other docs as shipped — they grow at `/end`.
-8. **Verify the hooks fire** (do not assume): Write a throwaway `tmp-hook-check.md`, read `.claude/pending-index-updates.txt` — it must list the file. Delete both. Run `python .claude/scripts/check-template-drift.py` — it must say up to date. If either fails, see Troubleshooting.
+8. **Verify the hooks fire** (do not assume): Write a throwaway `tmp-hook-check.md`, read `.claude/pending-index-updates.txt` — it must list the file. Then create a second throwaway FROM THE SHELL (`echo x > tmp-hook-shell.md`) and read the queue again — it must list that one too (the shell matcher). Delete all three. Run `python .claude/scripts/check-template-drift.py` — it must say up to date. If either fails, see Troubleshooting.
 9. Initial commit: `Bootstrap project from claude-project-template`. Push only if asked.
 
 Lessons in the Knowledge Base root are **not** loaded at bootstrap. Pull one in when the work maps to it (the `kb` agent does this), not before.
@@ -106,7 +106,7 @@ The ledger holds open loops a future session must act on — queued tests, gates
 
 ## Troubleshooting
 
-**Hooks don't fire** (writing a file leaves `pending-index-updates.txt` empty): (1) `python --version` inside Claude Code's shell — the hook commands invoke `python` literally; (2) `python -c "import os; print(os.environ.get('CLAUDE_PROJECT_DIR'))"` — empty means the harness didn't set it (launched outside the project root, or a wrapper stripped it), and every script silently no-ops; (3) run a hook by hand with a synthetic event (see MIGRATION.md §6); (4) confirm the matcher in `.claude/settings.json` is `Write|Edit`.
+**Hooks don't fire** (writing a file leaves `pending-index-updates.txt` empty): (1) `python --version` inside Claude Code's shell — the hook commands invoke `python` literally; (2) `python -c "import os; print(os.environ.get('CLAUDE_PROJECT_DIR'))"` — empty means the harness didn't set it (launched outside the project root, or a wrapper stripped it), and every script silently no-ops; (3) run a hook by hand with a synthetic event (see MIGRATION.md §6); (4) confirm the matcher in `.claude/settings.json` is `Write|Edit|Bash|PowerShell` — a file created by a script or a heredoc is only seen through the shell half of that matcher.
 
 **"Global rules not installed"** at session start: run the installer for this machine (the path is in the message), restart.
 
