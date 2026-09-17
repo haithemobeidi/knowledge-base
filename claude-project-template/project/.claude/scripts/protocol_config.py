@@ -70,6 +70,20 @@ DEFAULTS: dict = {
         "prune_closed_after_days": 7,
     },
     # Parallel tracks. [] = single track (IDs are L-N, no ownership rules).
+    # /end Step 0d (check-file-caps.py): line caps on the code files a session
+    # touched, and the same-basename twin check for new files. Extensions are
+    # the code the caps apply to; docs and data are never counted.
+    "file_caps": {
+        "soft": 500,
+        "hard": 800,
+        "extensions": [
+            ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".kt", ".kts", ".rs", ".py",
+            ".swift", ".java", ".go", ".css", ".scss", ".html", ".vue", ".svelte",
+        ],
+        # Project-relative prefixes the caps ignore on top of index_skip_prefixes
+        # (design prototypes, vendored code).
+        "skip_prefixes": [],
+    },
     # Each: {"name": "desktop", "prefix": "D", "owns": ["apps/desktop/", ...]}
     "tracks": [],
     # Paths every track may edit; changes there are announced with a ledger
@@ -101,8 +115,8 @@ def load_config(proj: str | None = None) -> tuple[dict, bool]:
         for key, value in raw.items():
             if key.startswith("$"):
                 continue  # $comment keys
-            if key == "ledger" and isinstance(value, dict):
-                cfg["ledger"].update({k: v for k, v in value.items() if not k.startswith("$")})
+            if key in ("ledger", "file_caps") and isinstance(value, dict):
+                cfg[key].update({k: v for k, v in value.items() if not k.startswith("$")})
             else:
                 cfg[key] = value
     # Normalise track shapes so callers never guess.
@@ -225,6 +239,7 @@ TEMPLATE_MANAGED = (
     ".claude/scripts/validate-index.py",
     ".claude/scripts/statusline.py",
     ".claude/scripts/scan-secrets.py",
+    ".claude/scripts/check-file-caps.py",
     ".claude/scripts/check-template-drift.py",
     ".claude/agents/planner.md",
     ".claude/agents/reviewer.md",

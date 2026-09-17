@@ -81,6 +81,8 @@ Mostly automatic: the `SessionStart` hook runs the worktree guard, checks the gl
 
 **Code quality** (stack-specific rules live in the project file; these hold everywhere): files do one thing, 500-line soft cap and 800 hard, propose splits before 500; DRY at 3+ uses (2 only when the shape is certain AND drift has real cost — when the abstraction might be wrong, duplication is cheaper than the wrong abstraction); group by feature, not by type — no `utils/` or `helpers/` dumping grounds; comments explain why; no premature abstractions.
 
+**Feature close — the judgement half of the size/DRY rule.** The mechanical half runs at every `/end` (Step 0d: `check-file-caps.py` over the session's touched files — soft 500 flagged to the ledger, hard 800 stops the wrap, new files with a twin basename named). The judgement half runs ONCE PER FEATURE, when its ledger item closes and the shape is settled: read the feature's files for reuse, duplication and extraction (the `/simplify`-shaped questions), and put every split or dedupe on the ledger as its own line with the concept named — then do them at a quiet point, never inside the wrap. Per feature, not per session: mid-feature splits churn files the next pause is about to touch, and per-session "cleanups" are the reshuffle-for-feel audits the work style forbids. (User ruling 2026-09-17, after a repository file grew 552 → 584 through one feature with nothing gating it.)
+
 **Git:** commit each verified pause-point, never one big wrap commit. Never commit without the user confirming the feature works. Push per `push_policy` (`ask` unless the project set `standing` and recorded it in DECISIONS.md). Stage explicit paths — never `git add -A`.
 
 **Codebase index:** the hook queues any unindexed file you Write or Edit; `/end` cannot complete while the queue is non-empty. Descriptions go in the index, not in file headers.
@@ -138,7 +140,7 @@ Declared in `protocol.json` → `tracks` (name, ID prefix, owned paths) and `sha
 | `PostToolUse` (`Write\|Edit\|Bash\|PowerShell`) | `track-new-file.py` | Queues unindexed paths (skip prefixes from `protocol.json`). Write/Edit queue the touched file; a shell call queues every untracked file in the repo afterwards, because scripts, generators, heredocs and `git mv` create files the file tools never see (24 files slipped past the old `Write\|Edit` matcher in one session) |
 | `Stop` | `stop-clean-tree-check.py` | Blocks a stop only when a Session commit just landed and files this track is responsible for are still dirty |
 
-Not hooks: `validate-index.py` (phantom rows, `/end` 1c), `scan-secrets.py` (content scan, `/end` 0c; `--history` audits everything pushable), `check-template-drift.py` (resync), `statusline.py` (prompt line). All scripts are silent on failure and never edited per project — `protocol.json` carries the differences.
+Not hooks: `validate-index.py` (phantom rows, `/end` 1c), `scan-secrets.py` (content scan, `/end` 0c; `--history` audits everything pushable), `check-file-caps.py` (line caps + twin basenames over the session's touched code, `/end` 0d; `--all` for the audit sitting), `check-template-drift.py` (resync), `statusline.py` (prompt line). All scripts are silent on failure and never edited per project — `protocol.json` carries the differences.
 
 ---
 

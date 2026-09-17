@@ -2,7 +2,7 @@
 
 Wrap up the development session cleanly. **Execute every step in order. Do not skip.** Applies only to repos with `.claude/protocol.json` (or `docs/CURRENT_STATE.md`); otherwise say so and stop.
 
-Read `.claude/protocol.json` once at the top: `check_command`, `secret_scan`, `push_policy`, `ledger` caps, `tracks`, `shared_paths`. In a multi-track repo, you declared your track at start; every step below is scoped to it.
+Read `.claude/protocol.json` once at the top: `check_command`, `secret_scan`, `push_policy`, `ledger` caps, `file_caps`, `tracks`, `shared_paths`. In a multi-track repo, you declared your track at start; every step below is scoped to it.
 
 **No new work during `/end`.** A user message that arrives mid-wrap is a note or a question: answer briefly or fold it into the docs; do not build.
 
@@ -34,6 +34,18 @@ python .claude/scripts/scan-secrets.py
 ```
 
 **Findings → STOP.** Do not commit. Move the value into an ignored file or a secret store, leave a `.example` sibling with the value blanked, rotate it if it was ever pushed, re-run until clean. `.gitignore` is a blocklist and only protects paths somebody remembered to list; this scan reads content. (Nested sub-repositories are invisible to it — run it inside them separately.)
+
+## Step 0d — File caps + twins (the mechanical half of the size/DRY rule)
+
+```bash
+python .claude/scripts/check-file-caps.py
+```
+
+It reads the code files THIS session touched (commits since the last wrap + the working tree) against `file_caps` in `protocol.json`.
+
+- **Over the hard cap (default 800) → STOP.** Split the file by a coherent concept now, or get an explicit override; never shave lines to pass.
+- **Over the soft cap (default 500), or a new file that shares its name with an existing one → a `[ ]` ledger line per file, right now**, naming the split candidate or the twin (Step 1d will see it). The wrap RECORDS; the split happens at the next quiet point. Do not split during `/end`.
+- The judgement half — is anything duplicated, should anything split — runs once per feature close, not per session (global `PROTOCOL.md` → "Feature close"). The mechanical check is what holds the line between those sittings.
 
 ## Step 1 — Verify pending index updates
 
