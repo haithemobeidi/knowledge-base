@@ -146,6 +146,23 @@ Commit each pause-point once it is tested, not one big commit at `/end`: granula
 
 Subagents research, plan, and review; they never write or edit code. The main session is the single source of changes, editing one file at a time during refactors so regressions attribute cleanly. Parallel writers fragment a project; parallel readers compound focus.
 
+## Tester agent
+
+Hands-on testing and troubleshooting of the running app are delegated to the global `tester` subagent (`~/.claude/agents/tester.md`, installed by `install-global.py`; a project may ship its own `.claude/agents/tester.md` to override it). It runs on Sonnet: driving a device or a browser is screenshot-heavy, slow work that should not sit in the main session's context, and it needs eyes and patience, not the strongest model.
+
+**When:** after every pause-point build (install first, then spawn); when the user reports a bug that needs a reproduction with logs; when a change touched something the user cannot see (sync, background services, a notification road). Not a replacement for the user's click list: the user still clicks, and visual taste is still theirs.
+
+**What the prompt carries:** the scratchpad folder to write in; the numbered click list verbatim, with the expected result per step; the project's device facts (device id to pin, display id, package or URL, no-tap zones, log filters: a project keeps these in its README or CLAUDE.md, not in the agent); the gate it must wait at (sign-in with the user's credentials, a purchase) and how long to poll; the report format.
+
+**What comes back:** PASS / FAIL / COULD NOT TEST per step with one line of evidence and screenshot names, a crash grep, an "also noticed" list, and what state it changed. The main session relays it in the pause message and never upgrades a PASS into "verified" on the user's behalf.
+
+**Rules that earned their place:**
+- **It never edits the repo** (the one-writer rule applies to it as to every subagent) and never runs a mutating git command.
+- **Its opinions are not rulings.** The user once spent a stretch talking to the tester in its own thread and took its suggestions (cut a row, a touch-target scare it later retracted) as decisions; they were not. The agent reports what is on screen; product calls happen in the main thread.
+- **It stops at credential gates and polls** instead of typing anything secret. Sign-in is the user's.
+- **Connectivity is never toggled from the agent**: airplane mode over wireless adb killed the link once.
+- **A green run from the agent does not close a pause**; the user's verdict does.
+
 ## Audits
 
 Audit passes (file size, DRY, dead code, dependency drift, security) are valuable when they target measurable wins:

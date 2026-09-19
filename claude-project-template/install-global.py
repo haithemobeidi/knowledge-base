@@ -19,6 +19,10 @@ What it does (idempotent — rerun after every Knowledge Base pull):
      project-level commands — which is what lets un-migrated projects keep
      their old commands untouched.
 
+  3. Copies global/agents/*.md (the `tester` subagent) into ~/.claude/agents/.
+     Claude Code reads user-level subagents from there in every project;
+     a project's own .claude/agents/<name>.md wins on a name clash.
+
 Usage:
     python install-global.py            # install / refresh
     python install-global.py --check    # report state, exit 1 if missing or stale
@@ -44,6 +48,7 @@ CLAUDE_DIR = pathlib.Path.home() / ".claude"
 CLAUDE_MD = CLAUDE_DIR / "CLAUDE.md"
 IMPORTS = ("global/WORK_STYLE.md", "global/PROTOCOL.md")
 COMMANDS = ("start.md", "end.md")
+AGENTS = ("tester.md",)
 
 
 def fwd(p: pathlib.Path) -> str:
@@ -96,13 +101,14 @@ def status() -> tuple[bool, list[str]]:
     for rel in IMPORTS:
         if not (TEMPLATE_DIR / rel).exists():
             problems.append(f"template file missing: {rel}")
-    for name in COMMANDS:
-        src = TEMPLATE_DIR / "global" / "commands" / name
-        dst = CLAUDE_DIR / "commands" / name
-        if not dst.exists():
-            problems.append(f"~/.claude/commands/{name} not installed")
-        elif sha(src) != sha(dst):
-            problems.append(f"~/.claude/commands/{name} is stale (rerun install)")
+    for kind, names in (("commands", COMMANDS), ("agents", AGENTS)):
+        for name in names:
+            src = TEMPLATE_DIR / "global" / kind / name
+            dst = CLAUDE_DIR / kind / name
+            if not dst.exists():
+                problems.append(f"~/.claude/{kind}/{name} not installed")
+            elif sha(src) != sha(dst):
+                problems.append(f"~/.claude/{kind}/{name} is stale (rerun install)")
     return not problems, problems
 
 
@@ -112,14 +118,15 @@ def install() -> None:
     new = (text.rstrip("\n") + "\n\n" if text.strip() else "") + managed_block()
     CLAUDE_MD.write_text(new, encoding="utf-8")
     print(f"wrote   {fwd(CLAUDE_MD)}  (managed block with {len(IMPORTS)} imports)")
-    (CLAUDE_DIR / "commands").mkdir(parents=True, exist_ok=True)
-    for name in COMMANDS:
-        src = TEMPLATE_DIR / "global" / "commands" / name
-        dst = CLAUDE_DIR / "commands" / name
-        shutil.copyfile(src, dst)
-        print(f"copied  {fwd(dst)}")
+    for kind, names in (("commands", COMMANDS), ("agents", AGENTS)):
+        (CLAUDE_DIR / kind).mkdir(parents=True, exist_ok=True)
+        for name in names:
+            src = TEMPLATE_DIR / "global" / kind / name
+            dst = CLAUDE_DIR / kind / name
+            shutil.copyfile(src, dst)
+            print(f"copied  {fwd(dst)}")
     print("\nInstalled. Restart any open Claude Code session to pick it up. After each `git pull` of the "
-          "Knowledge Base, rerun this script so the command copies refresh (the imports are already live).")
+          "Knowledge Base, rerun this script so the command and agent copies refresh (the imports are already live).")
 
 
 def uninstall() -> None:
@@ -127,12 +134,13 @@ def uninstall() -> None:
     if START in text:
         CLAUDE_MD.write_text(strip_block(text), encoding="utf-8")
         print(f"removed managed block from {fwd(CLAUDE_MD)}")
-    for name in COMMANDS:
-        dst = CLAUDE_DIR / "commands" / name
-        if dst.exists():
-            dst.unlink()
-            print(f"removed {fwd(dst)}")
-    print("Uninstalled. Projects that carry their own .claude/commands/ are unaffected.")
+    for kind, names in (("commands", COMMANDS), ("agents", AGENTS)):
+        for name in names:
+            dst = CLAUDE_DIR / kind / name
+            if dst.exists():
+                dst.unlink()
+                print(f"removed {fwd(dst)}")
+    print("Uninstalled. Projects that carry their own .claude/commands/ or .claude/agents/ are unaffected.")
 
 
 def main() -> None:

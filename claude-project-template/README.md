@@ -12,6 +12,7 @@ global/WORK_STYLE_DETAIL.md   (read on demand)
 global/PROTOCOL.md          ──@import──▶  ~/.claude/CLAUDE.md
 global/commands/start.md    ──copy────▶  ~/.claude/commands/   (project copies win if present)
 global/commands/end.md
+global/agents/tester.md     ──copy────▶  ~/.claude/agents/     (the hands-on tester subagent; project copies win)
 install-global.py             ← run once per machine, rerun after each KB pull
 
 project/CLAUDE.md           ──copy────▶  <repo>/CLAUDE.md      what is DIFFERENT about this app
@@ -38,7 +39,7 @@ python claude-project-template/install-global.py --uninstall
 
 New machine from zero: clone the KB repo (`github.com/haithemobeidi/knowledge-base`), `cd` into it, run the two commands above. That is the entire setup.
 
-It writes a managed block into `~/.claude/CLAUDE.md` (two `@import` lines pointing at this folder, plus the KB path) and copies `start.md` / `end.md` into `~/.claude/commands/`. Anything else in `~/.claude/CLAUDE.md` is left alone. Restart open sessions afterwards. **After each `git pull` of the Knowledge Base, rerun it** — the imports are already live, but the command copies are not.
+It writes a managed block into `~/.claude/CLAUDE.md` (two `@import` lines pointing at this folder, plus the KB path) copies `start.md` / `end.md` into `~/.claude/commands/`, and copies `agents/tester.md` into `~/.claude/agents/`. Anything else in `~/.claude/CLAUDE.md` is left alone. Restart open sessions afterwards. **After each `git pull` of the Knowledge Base, rerun it** — the imports are already live, but the command copies are not.
 
 If a project session starts without the global layer, the start hook says so loudly before anything else.
 
