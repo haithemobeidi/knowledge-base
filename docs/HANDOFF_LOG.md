@@ -45,3 +45,15 @@ Format is the template's own I-PASS shape, so this repo eats its own cooking:
 
 **Also:** the hosted KB site at the URL in the README is now stale; republish `kb-browser.artifact.html` against that URL when convenient.
 
+## 2026-09-21 01:55 | Protocol v2 — discoverability (delta)
+
+**Status:** green — v1 notice verified firing on Checkpoint and silent on a v2 preview; `kb-browser.html` regenerated. Pushed through `6a67818`.
+
+**Changed:** Delta since 01:40 only. `PROTOCOL.md` mentioned `protocol_version` zero times, so a v1 project loaded the live v2 protocol as if it were in force while running v1 scripts and documents — the two-sources-disagreeing failure, introduced by the v2 work itself. Fixed with a "which shape is this project on?" table in `PROTOCOL.md`, a start-hook notice on any v1 project, and a README row so "update this project to v2" routes to the procedure. Then seeded `CURRENT_PROTOCOL_VERSION` + `UPGRADE_SCRIPTS` and stopped, at the user's call.
+
+**Next:** The upgrade path, generically — see this repo's NEXT ACTION. The v2-specific strings in the hook, `PROTOCOL.md` and the README are the thing to replace.
+
+**If it fails:** If a generic hook message proves too noisy on v1 projects, fold it into the existing template-drift note rather than dropping it — a project silently following the wrong shape is worse than a line of nag.
+
+**Confirm:** Restate that the three v2-mentioning strings exist and where, before writing the generic version — otherwise the generic path lands alongside the hardcoded one instead of replacing it.
+

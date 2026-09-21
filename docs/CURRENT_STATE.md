@@ -1,6 +1,6 @@
 # Knowledge Base — Current State
 
-_Last updated: 2026-09-21 01:40_
+_Last updated: 2026-09-21 01:55_
 
 > **Deliberately minimal.** This repo is a reference library and the home of the
 > project template, not an app — so it carries two documents and no machinery:
@@ -20,11 +20,9 @@ _Last updated: 2026-09-21 01:40_
 
 ## 📍 NEXT ACTION
 
-Migrate Playmoir/Checkpoint to v2, in a session where no other session is open in that checkout: `check-template-drift.py --sync`, run `migrate-docs-v2.py`, take the 62-bullet triage table to the user (K/L/A per bullet), fill the new **Shipped** section by hand, replace the originals, then set `protocol_version: 2`.
+Build the version-agnostic upgrade path (see Open loops): a global `/upgrade` command beside `/start` and `/end`, and a start-hook message that compares `protocol_version` against `CURRENT_PROTOCOL_VERSION` instead of naming v2. Do it before v3 exists, not after.
 
-Dry run already done (2026-09-21, output in a scratchpad that will not survive — re-run it): **167,474 → 31,004 chars, ~41,000 → ~7,751 tokens.** CURRENT_STATE 95,107 → 8,939. Struck-ID citations 150 → 20. Conservation checked: 90,453 left CURRENT_STATE, 91,698 arrived in the archive.
-
-Still 124% of the 25,000 budget afterwards, and the largest contributor is then the ledger manifest (12,590 chars, 87 open items). Getting under needs the one-time ledger triage that has been deferred as Playmoir's L-114 — the v2 two-per-wrap rate would take ~29 sessions on its own. **Shrink the contributor; do not raise the budget.**
+Separately and **not this repo's job**: migrating Playmoir/Checkpoint to v2 happens in a Checkpoint session with the agent that has that project's context — `MIGRATION.md` §6b, and the 62-bullet triage belongs there. Dry run done 2026-09-21: **167,474 → 31,004 chars, ~41,000 → ~7,751 tokens**; CURRENT_STATE 95,107 → 8,939; conservation checked (90,453 out, 91,698 in). It lands at 124% of the 25,000 budget, and the cause is the ledger's 87 open items, not the document shapes — shrink the contributor, not the budget.
 
 ## Template rollout
 
