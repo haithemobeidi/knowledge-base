@@ -78,7 +78,14 @@ Do this **before** writing CURRENT_STATE, so the wrap is written against the led
 1. Read the ledger **from disk** (a concurrent session may have edited it).
 2. Disposition every `[ ]` item this session touched: `[x]` + `→ DONE <date>: <one line>`, or `[-]` + reason. Untouched items stay `[ ]`. **Never strike an item you merely don't recognise.** Multi-track: only your prefix's lines, plus lines tagged for you or `→all` that you resolved (note "closed by <track>").
 3. Append `[ ]` lines for anything this session queued or deferred that isn't captured — scan for "next session", "before release", "check later", riders, gates. Apply the worthiness test (open loop with a done-condition / not tracked elsewhere / can't be done in 10 minutes / one ID per loop). **The first line must be a self-contained TITLE** — it is the only part a future session sees in the manifest, so lead with the headline and put the detail on continuation lines. **There is no length cap**: keep the item whole, here. Multi-track: mint with your prefix; put `→<other track>` / `→all` right after the ID (`D-9 →mobile (2026-09-09) …`).
-4. **MOVE** `[x]`/`[-]` lines dispositioned more than `ledger.move_closed_after_days` ago into `docs/SESSION_LEDGER_CLOSED.md` (create it if absent; append, never reorder). **Never delete them.** That file is never injected and may grow forever. An ID cited in a commit subject, a handoff entry or a spine cell has to stay resolvable — deleting its line leaves every citation pointing at nothing.
+4. **MOVE** closed lines to `docs/SESSION_LEDGER_CLOSED.md` — run the script, do not do it by hand:
+
+   ```bash
+   python .claude/scripts/ledger-archive.py            # dry run: what would move
+   python .claude/scripts/ledger-archive.py --apply
+   ```
+
+   **Never delete them.** That file is never injected and may grow forever; an ID cited in a commit subject, a handoff entry or a spine cell has to stay resolvable. (v1 specified this move as prose and it never once ran — 88 closed lines sat in a ledger with a 7-day rule. That is why it is a script.)
 5. Count the open items. Over `open_soft_max` → **route or close the two oldest stale items now** (items past `stale_after_days`), proposing a disposition for each and letting the user rule. Two items, not a triage sitting: a level-based cap that has been exceeded for months is not a cap, and a rate you would not bother skipping is.
 
 ## Step 1e — `check-ledger-refs.py` (the copy-forward guard)
@@ -112,6 +119,14 @@ This exists because copy-forward is the default editing action: every wrap re-re
 **Not here:** session narrative (that is the handoff entry) · any ledger item's *status* (cite the ID) · a copy of the phase/block list (that is the spine) · a "things to watch" pile. On one project those turned this file into 92,000 characters, 63% of it a 30-session narrative, injected whole at every session start. Overwrite, do not append.
 
 ## Step 3 — Append one entry to `docs/HANDOFF_LOG.md`
+
+First, get the facts from git rather than from memory:
+
+```bash
+python .claude/scripts/end-derive.py
+```
+
+It prints the commits since the last wrap and the files touched, grouped by track ownership, and flags a shared-path change that needs an announcing ledger line. It deliberately does not derive build status — that is Step 0c's result, and inferring it would be exactly the unearned confidence this protocol keeps finding. **Those are the facts; you write the judgement.**
 
 Get the time with `date '+%Y-%m-%d %H:%M'`. Append at the bottom, in **I-PASS shape**:
 

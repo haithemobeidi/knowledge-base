@@ -16,11 +16,13 @@ no protocol.json at all still behaves like the original single-track template.
 
 from __future__ import annotations
 
+import datetime as _dt
 import hashlib
 import json
 import os
 import pathlib
 import re
+import subprocess
 
 CONFIG_REL_PATH = ".claude/protocol.json"
 
@@ -265,6 +267,45 @@ def template_root() -> pathlib.Path | None:
     return None
 
 
+def template_currency(tmpl: pathlib.Path) -> tuple[int | None, int | None]:
+    """(days since the KB clone last fetched, days since its HEAD commit).
+
+    Why this exists: the drift check compares a project against whatever
+    template is on THIS machine's disk, and nothing in any session lifecycle
+    pulls the Knowledge Base. So on a machine whose clone is twenty commits
+    behind, `check-template-drift.py` compares against an old template and
+    prints "up to date" — a false all-clear about the source of truth for the
+    rules themselves. Same class as a `git status` that says "up to date with
+    origin" without a fetch.
+
+    Both numbers are read from the filesystem, no network: FETCH_HEAD's mtime
+    is when this clone last heard from its remote, and HEAD's commit date
+    bounds how old its content can be. Neither proves currency — only a fetch
+    does — but a clone that has not talked to its remote in a week is worth
+    saying out loud before anyone trusts a drift report from it."""
+    git_dir = tmpl.parent / ".git"
+    now = _dt.datetime.now(_dt.timezone.utc)
+    fetched = None
+    fh = git_dir / "FETCH_HEAD"
+    try:
+        if fh.exists():
+            ts = _dt.datetime.fromtimestamp(fh.stat().st_mtime, _dt.timezone.utc)
+            fetched = (now - ts).days
+    except OSError:
+        pass
+    head = None
+    try:
+        out = subprocess.run(
+            ["git", "log", "-1", "--format=%cI"], cwd=str(tmpl.parent),
+            capture_output=True, text=True, timeout=5, check=False,
+        ).stdout.strip()
+        if out:
+            head = (now - _dt.datetime.fromisoformat(out)).days
+    except (OSError, subprocess.SubprocessError, ValueError):
+        pass
+    return fetched, head
+
+
 def file_hash(path: pathlib.Path) -> str:
     try:
         data = path.read_bytes().replace(b"\r\n", b"\n")
@@ -288,6 +329,8 @@ TEMPLATE_MANAGED = (
     ".claude/scripts/check-payload-budget.py",
     ".claude/scripts/check-ledger-refs.py",
     ".claude/scripts/migrate-docs-v2.py",
+    ".claude/scripts/ledger-archive.py",
+    ".claude/scripts/end-derive.py",
     ".claude/scripts/check-template-drift.py",
     ".claude/agents/planner.md",
     ".claude/agents/reviewer.md",

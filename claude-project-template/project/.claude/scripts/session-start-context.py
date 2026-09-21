@@ -45,6 +45,7 @@ from protocol_config import (  # noqa: E402
     drift_report,
     global_installed,
     id_prefixes,
+    template_currency,
     load_config,
     multi_track,
     prefix_map,
@@ -449,6 +450,19 @@ def main() -> None:
     # Template drift (informational, one line).
     tmpl = template_root()
     if tmpl and tmpl.is_dir():
+        # A drift report is only as current as the clone it compares against,
+        # and nothing in a session pulls the Knowledge Base. Say so when this
+        # machine's clone has gone quiet, BEFORE the report it qualifies.
+        fetched_days, head_days = template_currency(tmpl)
+        if (fetched_days is not None and fetched_days >= 3) or (fetched_days is None and (head_days or 0) >= 7):
+            when = f"last fetched {fetched_days} day(s) ago" if fetched_days is not None else "never fetched here"
+            parts.append(
+                f"📚 **The Knowledge Base clone on this machine is {when}** (newest commit "
+                f"{head_days if head_days is not None else '?'} day(s) old). The template-drift line below "
+                "compares against THAT copy, so it can report 'up to date' while the real template has moved. "
+                "`git pull --ff-only` the KB and rerun `install-global.py` before trusting a drift result, "
+                "or before syncing a project.\n"
+            )
         pdiff, gdiff = drift_report(proj, tmpl)
         if pdiff or gdiff:
             bits = []

@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import pathlib
 import shutil
+import subprocess
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
@@ -40,6 +41,7 @@ from protocol_config import (  # noqa: E402
     drift_report,
     global_installed,
     project_dir,
+    template_currency,
     template_root,
 )
 
@@ -61,6 +63,32 @@ def main() -> None:
         print("check-template-drift: template not found. Install the global rules "
               "(install-global.py) or pass --template <path to claude-project-template>.")
         sys.exit(0)
+
+    # Fetch the KB clone before comparing against it. This script is the tool
+    # you run to decide whether to sync, and it was comparing against whatever
+    # copy happened to be on this machine's disk — so on a clone twenty commits
+    # behind it printed "up to date" about the source of truth for the rules
+    # themselves. An internal-consistency check cannot detect staleness: stale
+    # copies agree with each other perfectly. `--no-fetch` to skip (offline).
+    if "--no-fetch" not in args:
+        try:
+            subprocess.run(["git", "fetch", "origin", "--prune"], cwd=str(tmpl.parent),
+                           capture_output=True, timeout=20, check=False)
+        except (OSError, subprocess.SubprocessError):
+            pass
+    try:
+        behind = subprocess.run(["git", "rev-list", "--count", "HEAD..@{u}"], cwd=str(tmpl.parent),
+                                capture_output=True, text=True, timeout=5, check=False).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        behind = ""
+    if behind.isdigit() and int(behind) > 0:
+        print(f"⚠️  The Knowledge Base clone at {tmpl.parent} is {behind} commit(s) BEHIND its remote.")
+        print("   Everything below compares against that stale copy. `git pull --ff-only` there,")
+        print("   rerun install-global.py, then run this again before syncing anything.\n")
+    elif not behind:
+        fetched, head = template_currency(tmpl)
+        print(f"(Could not verify the KB clone against its remote — last fetched "
+              f"{fetched if fetched is not None else '?'} day(s) ago. Drift results are unverified.)\n")
 
     pdiff, gdiff = drift_report(proj, tmpl)
     if not global_installed():

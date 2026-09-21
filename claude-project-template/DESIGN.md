@@ -222,7 +222,8 @@ v2 adds the receiver's half: **restate the NEXT ACTION in your own words, and na
 | `session-start-context.py` | modified | Render the manifest; inject one handoff entry; **measure and print the payload** |
 | `check-payload-budget.py` | **new** | The aggregate guard. Reads the files, reports per-part and total, exits non-zero over budget |
 | `check-ledger-refs.py` | **new** | The copy-forward guard. Every ledger ID cited in `CURRENT_STATE.md` / `ROADMAP.md` classified open / struck / not-in-ledger |
-| `end-derive.py` | **new** | Generate the derivable fields: build status from the last check run, changed files from commits since the last wrap |
+| `end-derive.py` | **new** | The facts git can prove: commits since the last wrap, files touched grouped by track ownership. Does NOT derive build status — that is Step 0c's result, and inferring it would be unearned confidence |
+| `ledger-archive.py` | **new** | Moves closed lines to `SESSION_LEDGER_CLOSED.md`. Dry run by default; refuses a dirty ledger; balances its line count before writing |
 | `migrate-docs-v2.py` | **new** | One-time content migration, writes `.new` files beside the originals |
 | everything else | unchanged | |
 

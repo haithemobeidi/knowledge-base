@@ -50,18 +50,16 @@ format, the ACCEPT step, and two v1 bug fixes. Reasoning and sources are in
 **v2 is inert until a project opts in.** `protocol_version` defaults to 1, so a
 project that syncs the scripts behaves exactly as it did before.
 
-`migrate-docs-v2.py` is written and dry-run against Playmoir. Not built:
-`end-derive.py` (the derived build-status and changed-files fields), and the
-recurring `SESSION_LEDGER_CLOSED.md` move at `/end` — the migration script does
-the one-time move, but the ongoing one is specified in `end.md` Step 1d.4 with
-no script behind it, which by this protocol's own standard means it will not
-happen.
+Everything `DESIGN.md` specifies is now built. `migrate-docs-v2.py` is written
+and dry-run against Playmoir; `ledger-archive.py` does the recurring closed-line
+move; `end-derive.py` supplies the wrap's facts from git. The drift check now
+fetches the KB clone before comparing against it, and the start hook warns when
+this machine's clone has gone quiet — that gap would have bitten on the first
+attempt to sync the laptop.
 
 ## Open loops
 
-- `migrate-docs-v2.py` — written; dry-run verified against Playmoir, not yet applied
-- `end-derive.py` — not written
-- The closed-line move is prose-only, no script
+- Playmoir migration not yet applied (its own session, with the Checkpoint agent)
 - Three KB lessons are owed from this work: the shared-payload-budget lesson
   (its incident is already in `DECISIONS.md` 2026-09-08 and was never distilled),
   catalog-plus-fetch as an information-architecture pattern, and writing state
