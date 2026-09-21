@@ -24,6 +24,23 @@ Every rule here traces to a measured failure on a real project:
 
 ---
 
+## Which shape is this project on? Read `protocol_version` before anything else
+
+This file is imported live from the Knowledge Base, so it always describes the **newest** shape. A project only follows it once its documents have been migrated. `.claude/protocol.json` → `protocol_version` says which:
+
+| | `protocol_version: 1` (or absent) | `protocol_version: 2` |
+|---|---|---|
+| CURRENT_STATE | rolling snapshot, injected whole | the state of the **app**, no narrative |
+| Ledger at start | every open item's text, truncated at 600 chars | a **manifest** of titles + full text for cited items |
+| Handoff | one ~300-char line; last 5 injected | an **I-PASS entry**; only the newest per track injected |
+| Closed lines | pruned | **moved** to `SESSION_LEDGER_CLOSED.md` |
+
+**On a v1 project, the v2-only rules below do not apply yet** — follow what the project's documents and scripts actually are, and do not start writing I-PASS entries into a v1 handoff log or titles-first items into a v1 ledger. Mention once that v2 exists and that `MIGRATION.md` §6b is the path; migrating is a decision the user makes, in its own session, never mid-work.
+
+The scripts already branch on this, so a v1 and a v2 project both work. The rules that apply to **both**: the ledger's moment-of-event discipline, the worthiness test, frozen IDs, parallel-track ownership, the spine as the single source of status, and every guard in "Hooks and scripts".
+
+---
+
 ## Layering — global vs project
 
 | Layer | Lives in | Loaded | Holds |

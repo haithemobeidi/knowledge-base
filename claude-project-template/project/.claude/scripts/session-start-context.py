@@ -476,6 +476,21 @@ def main() -> None:
                 "status report; resync only when the user says so.\n"
             )
 
+    # Document shape. PROTOCOL.md is imported live and always describes the
+    # NEWEST shape, so a project that has not migrated would otherwise read
+    # rules its own documents and scripts do not implement — two sources
+    # disagreeing, which is the failure this protocol exists to prevent.
+    if version < 2:
+        parts.append(
+            "\n📄 **This project is on document shape v1** (`protocol.json` → `protocol_version`), while "
+            "the imported `PROTOCOL.md` describes v2. **Follow v1**: CURRENT_STATE as it is, the ledger "
+            "items as injected below, one-line handoff entries. Do NOT write I-PASS handoff entries or "
+            "title-first ledger items into a v1 project. v2 (a measured session-start payload, a ledger "
+            "manifest, I-PASS handoffs) is available — the path is `MIGRATION.md` §6b in the Knowledge "
+            "Base template, as its own session, never mid-work. Mention it once if it comes up; do not "
+            "start it unasked.\n"
+        )
+
     # Tracks.
     if multi_track(cfg):
         rows = []
