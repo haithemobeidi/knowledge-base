@@ -1,19 +1,8 @@
 # Knowledge Base — Handoff Log
 
-Append-only, newest at the bottom. One entry per session that did multi-step work
-here (a template change, a mining pass, a site rebuild). A single lesson written
-and committed does not need an entry — its commit message is the record.
+Append-only, newest at the bottom. One entry per session that did multi-step work here — a template change, a mining pass, a site rebuild. A single lesson written and committed does not need one; its commit message is the record.
 
-Format is the template's own I-PASS shape, so this repo eats its own cooking:
-
-```
-## YYYY-MM-DD HH:MM | <area>
-**Status:** green | yellow | red — <what was verified>
-**Changed:** <the delta>
-**Next:** <the first move, with enough context to make it>
-**If it fails:** <the contingency>
-**Confirm:** <what the next session restates before starting>
-```
+Format and rationale: `claude-project-template/project/docs/HANDOFF_LOG.md`. Same I-PASS shape, not re-explained here.
 
 ---
 

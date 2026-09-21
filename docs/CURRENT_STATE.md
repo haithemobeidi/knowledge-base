@@ -1,6 +1,6 @@
 # Knowledge Base — Current State
 
-_Last updated: 2026-09-21 01:55_
+_Last updated: 2026-09-21 02:05_
 
 > **Deliberately minimal.** This repo is a reference library and the home of the
 > project template, not an app — so it carries two documents and no machinery:
@@ -72,7 +72,3 @@ attempt to sync the laptop.
   (which absorbed catalog-plus-fetch as its fix section rather than splitting one
   idea across two files) and `handoff-for-a-reader-with-no-memory.md`, plus the
   prune-then-dangle extension inside `parallel-writers-minting-ids-collide.md`.
-
-## Active blockers
-
-None.
