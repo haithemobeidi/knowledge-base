@@ -26,6 +26,18 @@ import subprocess
 
 CONFIG_REL_PATH = ".claude/protocol.json"
 
+# The document shape THIS template ships. A project's own `protocol_version`
+# is compared against it, so "is this project behind?" is a number comparison
+# rather than a hardcoded mention of whichever version happens to be newest.
+# Bump this when a new shape lands, and add its hop to UPGRADE_SCRIPTS.
+CURRENT_PROTOCOL_VERSION = 2
+
+# target version -> the script that migrates a project INTO it, one hop each.
+# A project two versions behind runs them in order.
+UPGRADE_SCRIPTS = {
+    2: ".claude/scripts/migrate-docs-v2.py",
+}
+
 # Paths never indexed and never scanned — protocol bookkeeping and build output.
 DEFAULT_SKIP_PREFIXES = (
     ".claude/",

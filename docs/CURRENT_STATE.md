@@ -60,7 +60,17 @@ attempt to sync the laptop.
 ## Open loops
 
 - Playmoir migration not yet applied (its own session, with the Checkpoint agent)
-- None. The three owed lessons are written: `shared-budget-caps-relocate-mass.md`
+- **A version-agnostic upgrade path** (user, 2026-09-21). v2 will not be the last
+  shape, and the v1-vs-v2 notice shipped in `66d8b6c` hardcodes "v2" in the hook,
+  `PROTOCOL.md` and the README — all three need rewriting at v3. The seed is in
+  place: `protocol_config.CURRENT_PROTOCOL_VERSION` and the `UPGRADE_SCRIPTS`
+  map (target version → the script that migrates into it, one hop each), both
+  currently unused. What is NOT built, deliberately: a global `/upgrade` command
+  alongside `/start` and `/end` (installed by `install-global.py`, so the user
+  types one word in any project), a generic start-hook message that names the
+  two version numbers instead of mentioning v2, and multi-hop dispatch for a
+  project two shapes behind. Do this before v3, not after.
+- The three owed lessons are written: `shared-budget-caps-relocate-mass.md`
   (which absorbed catalog-plus-fetch as its fix section rather than splitting one
   idea across two files) and `handoff-for-a-reader-with-no-memory.md`, plus the
   prune-then-dangle extension inside `parallel-writers-minting-ids-collide.md`.
