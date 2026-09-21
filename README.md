@@ -48,6 +48,8 @@ That writes two import lines into `~/.claude/CLAUDE.md` (pointing at this clone,
 
 Do **not** copy the lesson files, `DECISIONS.md`, `references.md`, or this README into a project. Lessons are pulled in on demand when the work maps to one (the `kb` agent does this), never auto-loaded.
 
+**Working ON this repo** (a template change, a mining pass, a site rebuild): read [`docs/CURRENT_STATE.md`](./docs/CURRENT_STATE.md) and the newest entry in [`docs/HANDOFF_LOG.md`](./docs/HANDOFF_LOG.md) first, and append a handoff entry when you stop mid-build. Two documents, no hooks and no ledger — this is a reference repo, not a project, but multi-session work happens here and used to leave nothing behind.
+
 ---
 
 ## Project template
