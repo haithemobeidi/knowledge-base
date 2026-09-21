@@ -30,3 +30,18 @@ Format is the template's own I-PASS shape, so this repo eats its own cooking:
 **Confirm:** v2 is **inert** until a project sets `protocol_version: 2`. Before touching Playmoir, restate that syncing the scripts alone changes nothing, and that the 95KB `CURRENT_STATE` comes down only when the documents are migrated — not when the scripts are.
 
 **Also worth knowing:** two claims made during this session were wrong and retracted — that a count of 22 open ledger items citing closed items indicated missed closures (they are provenance and sequencing citations; the ledger is well-kept), and a routing-detection check built on that premise (dropped; it would have false-positived on the first case examined). Do not resurrect either without new evidence. The four research findings files are in the session scratchpad only and will not survive; `DESIGN.md` carries the citations that mattered.
+
+## 2026-09-21 01:40 | Protocol v2 — the three unbuilt pieces, and the lessons
+
+**Status:** green — all scripts syntax-checked and exercised against real data; `ledger-archive.py` dry-run on Playmoir (5 items would move), `end-derive.py` run against this repo, the drift check confirmed fetching. Pushed as `f9bce60` plus the lessons commit.
+
+**Changed:** Closed every gap between what `DESIGN.md` specified and what existed. `check-template-drift.py` now fetches the Knowledge Base clone before comparing against it — it was diffing projects against whatever copy sat on that machine's disk, so a stale clone printed "up to date" about the source of truth for the rules themselves, and that would have bitten on the first attempt to sync the laptop. Added `ledger-archive.py` (moves struck lines to `SESSION_LEDGER_CLOSED.md`; dry run by default, refuses a dirty ledger, balances its line count) and `end-derive.py` (the facts git can prove for a wrap; deliberately does not derive build status). Wrote the two owed KB lessons and the prune-then-dangle extension, regenerated `kb-browser.html` (96 lessons).
+
+**Next:** Nothing is owed here. The Playmoir/Checkpoint migration is the remaining work and belongs in a Checkpoint session with the agent that has that project's context — `MIGRATION.md` §6b is the procedure and the 62-bullet triage happens there, not here.
+
+**If it fails:** If the migration's payload lands above 25,000 chars after the documents are migrated, that is expected and the cause is the ledger's open count (87 items ≈ 12,590 chars of manifest), not the document shapes. Shrink the ledger; do not raise the budget.
+
+**Confirm:** v2 is inert until a project sets `protocol_version: 2`. Restate that before touching any project — syncing the scripts alone changes nothing except two bug fixes.
+
+**Also:** the hosted KB site at the URL in the README is now stale; republish `kb-browser.artifact.html` against that URL when convenient.
+

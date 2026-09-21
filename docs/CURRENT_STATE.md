@@ -1,6 +1,6 @@
 # Knowledge Base — Current State
 
-_Last updated: 2026-09-21 01:05_
+_Last updated: 2026-09-21 01:40_
 
 > **Deliberately minimal.** This repo is a reference library and the home of the
 > project template, not an app — so it carries two documents and no machinery:
@@ -60,12 +60,10 @@ attempt to sync the laptop.
 ## Open loops
 
 - Playmoir migration not yet applied (its own session, with the Checkpoint agent)
-- Three KB lessons are owed from this work: the shared-payload-budget lesson
-  (its incident is already in `DECISIONS.md` 2026-09-08 and was never distilled),
-  catalog-plus-fetch as an information-architecture pattern, and writing state
-  for a reader with no memory of the session that wrote it. Two extensions:
-  a prune-then-dangle case in `parallel-writers-minting-ids-collide.md`, and the
-  growth-default half beside `n-copies-of-truth-drift-guard.md`.
+- None. The three owed lessons are written: `shared-budget-caps-relocate-mass.md`
+  (which absorbed catalog-plus-fetch as its fix section rather than splitting one
+  idea across two files) and `handoff-for-a-reader-with-no-memory.md`, plus the
+  prune-then-dangle extension inside `parallel-writers-minting-ids-collide.md`.
 
 ## Active blockers
 
