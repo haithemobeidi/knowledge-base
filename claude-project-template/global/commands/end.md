@@ -77,9 +77,21 @@ Do this **before** writing CURRENT_STATE, so the wrap is written against the led
 
 1. Read the ledger **from disk** (a concurrent session may have edited it).
 2. Disposition every `[ ]` item this session touched: `[x]` + `→ DONE <date>: <one line>`, or `[-]` + reason. Untouched items stay `[ ]`. **Never strike an item you merely don't recognise.** Multi-track: only your prefix's lines, plus lines tagged for you or `→all` that you resolved (note "closed by <track>").
-3. Append `[ ]` lines for anything this session queued or deferred that isn't captured — scan for "next session", "before release", "check later", riders, gates. Apply the worthiness test (open loop with a done-condition / not tracked elsewhere / can't be done in 10 minutes / one ID per loop) and the size cap: an item over `ledger.item_max_chars` gets shortened, its analysis moved to a bug entry, backlog entry, `docs/notes/<ID>.md`, or DECISIONS entry, and a pointer left behind. Multi-track: mint with your prefix; put `→<other track>` / `→all` right after the ID when someone else acts on it (`D-9 →mobile (2026-09-09) …`).
-4. Prune `[x]`/`[-]` lines dispositioned more than `prune_closed_after_days` ago (history lives in git).
-5. Count the open items. Over `open_soft_max` → say so in the report and offer a triage pass. List items older than `stale_after_days` as route-or-close (the user decides in a batch; do not close them yourself).
+3. Append `[ ]` lines for anything this session queued or deferred that isn't captured — scan for "next session", "before release", "check later", riders, gates. Apply the worthiness test (open loop with a done-condition / not tracked elsewhere / can't be done in 10 minutes / one ID per loop). **The first line must be a self-contained TITLE** — it is the only part a future session sees in the manifest, so lead with the headline and put the detail on continuation lines. **There is no length cap**: keep the item whole, here. Multi-track: mint with your prefix; put `→<other track>` / `→all` right after the ID (`D-9 →mobile (2026-09-09) …`).
+4. **MOVE** `[x]`/`[-]` lines dispositioned more than `ledger.move_closed_after_days` ago into `docs/SESSION_LEDGER_CLOSED.md` (create it if absent; append, never reorder). **Never delete them.** That file is never injected and may grow forever. An ID cited in a commit subject, a handoff entry or a spine cell has to stay resolvable — deleting its line leaves every citation pointing at nothing.
+5. Count the open items. Over `open_soft_max` → **route or close the two oldest stale items now** (items past `stale_after_days`), proposing a disposition for each and letting the user rule. Two items, not a triage sitting: a level-based cap that has been exceeded for months is not a cap, and a rate you would not bother skipping is.
+
+## Step 1e — `check-ledger-refs.py` (the copy-forward guard)
+
+```bash
+python .claude/scripts/check-ledger-refs.py
+```
+
+Every ledger ID cited in `CURRENT_STATE.md` and the spine, classified open / struck / absent. Read each **struck** line and decide: does it still describe the item as pending (fix it in Step 2), or as history (correct as written, leave it)? *Absent* means the line has moved to the closed file — informational, not a finding.
+
+This exists because copy-forward is the default editing action: every wrap re-reads the file and rewrites the parts it was thinking about, so a line nobody was thinking about survives untouched. One real project's CURRENT_STATE cited 146 IDs and 65 were already struck. The `/start` cross-check cannot catch it — the documents agree with each other perfectly.
+
+**Multi-track:** a stale line in another track's section is not yours to edit. Put it on the ledger tagged for that track.
 
 ## Step 2 — Reconcile the spine, then overwrite `docs/CURRENT_STATE.md`
 
@@ -87,32 +99,46 @@ Do this **before** writing CURRENT_STATE, so the wrap is written against the led
 
 **Then re-read `docs/CURRENT_STATE.md` from disk** before overwriting (`git log --oneline -2 -- docs/CURRENT_STATE.md`, or compare against the session-start copy). Concurrent sessions share the checkout; if another session wrapped mid-flight, fold its facts in rather than clobbering.
 
-**Then** replace it. Single track — the whole file; multi-track — **only your track's sections and the Shared facts you changed** (the other track's sections are copied through verbatim). Required shape:
+**Then** replace it. Single track — the whole file; multi-track — **only your track's sections and the Shared facts you changed** (the other track's sections are copied through verbatim).
 
-- **📍 NEXT ACTION** (one per track) — ONE unambiguous line matching the spine's CURRENT marker. Session start reports it verbatim.
-- **Shared** (multi-track) — deploy state of shared services, schema/migration version, anything both tracks consume, each stamped `(by <track>, <date>)`.
-- Build status: working / broken / not yet tested (per track).
-- Optional loose ends — **point at open ledger IDs**; no separate prose list (regenerated prose silently drops items). Clearly marked as NOT the next step.
-- Last things accomplished this session (your track).
-- Active blockers + things to watch.
+**v2: this file is the state of the APP, not the state of the session.** The test for every line is *if we are on 1.0.1, what does that entail?* Required shape:
 
-**Do NOT keep a copy of the phase/block-status list here** — point at the spine. Overwrite, do not append.
+- **📍 NEXT ACTION** (one per track) — ONE unambiguous line matching the spine's CURRENT marker, **citing the ledger IDs it depends on** (those are the items the next session gets in full).
+- **Shipped** — version per track, and where it is (released / in review / internal).
+- **Build status** — working / broken / not yet tested, what was verified, on what, when.
+- **Shared services** (multi-track or client+server) — deploy state both sides consume, stamped `(by <track>, <date>)`.
+- **Active blockers**, and **Open loops** as a pointer to ledger IDs only.
 
-## Step 3 — Append one line to `docs/HANDOFF_LOG.md`
+**Not here:** session narrative (that is the handoff entry) · any ledger item's *status* (cite the ID) · a copy of the phase/block list (that is the spine) · a "things to watch" pile. On one project those turned this file into 92,000 characters, 63% of it a 30-session narrative, injected whole at every session start. Overwrite, do not append.
 
-Get the time with `date '+%Y-%m-%d %H:%M'`. Append at the bottom:
+## Step 3 — Append one entry to `docs/HANDOFF_LOG.md`
 
-```
-YYYY-MM-DD HH:MM | <Phase/Block name or area> | <one-line summary incl. "Next:"> | <build status>
-```
-
-Multi-track repos add the track as the second field:
+Get the time with `date '+%Y-%m-%d %H:%M'`. Append at the bottom, in **I-PASS shape**:
 
 ```
-YYYY-MM-DD HH:MM | <track> | <Phase/Block name or area> | <summary incl. "Next:"> | <build status>
+## YYYY-MM-DD HH:MM | <track> | <Phase/Block or area>
+**Status:** green | yellow | red — <what was verified, on what, when>
+**Changed:** <the delta this session — NOT a re-summary of the project>
+**Next:** <the first move, with enough context to make it>
+**If it fails:** <the contingency — what to try, or what it would mean>
+**Confirm:** <the one thing the next session must restate before starting>
 ```
 
-**Summary hard cap ~300 characters** — it is a scannable index entry; fact-grade detail belongs in the ledger and CURRENT_STATE. A post-`/end` mini-wrap line covers ONLY the delta since the previous wrap line.
+Single-track repos drop the `<track>` field.
+
+**No length cap** — only this entry is injected next session, so it can be as long as the next session needs. But keep it to the **delta**: the reader has CURRENT_STATE, and a meta-analysis of 1,590 handovers found *excessive non-essential information* among the leading causes of the omissions handovers exist to prevent.
+
+**If it fails** and **Confirm** are not optional. They are the two elements the handover literature finds missing most often, and they are what turn a summary into something the next session can act on when the happy path does not happen. If you cannot write **Confirm**, the entry is not finished.
+
+A post-`/end` mini-wrap appends an entry covering ONLY the delta since the previous one.
+
+## Step 3b — Payload budget
+
+```bash
+python .claude/scripts/check-payload-budget.py
+```
+
+Reports the assembled session-start payload against `payload.target_chars`. Over budget → **shrink the largest contributor, never raise the budget.** The budget is the only cap that stays honest when mass moves between documents; raising it is how the last one failed.
 
 ## Step 4 — Commit and push
 

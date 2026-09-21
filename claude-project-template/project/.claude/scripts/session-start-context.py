@@ -44,10 +44,12 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from protocol_config import (  # noqa: E402
     drift_report,
     global_installed,
+    id_prefixes,
     load_config,
     multi_track,
     prefix_map,
     project_dir,
+    protocol_version,
     template_root,
     track_aliases,
     track_names,
@@ -66,9 +68,32 @@ def run(cmd: list[str], cwd: str, timeout: int = 5) -> tuple[int, str]:
         return 1, ""
 
 
+# --measure: build the payload exactly as the hook would, then print its size
+# breakdown instead of emitting it. Measuring a RECONSTRUCTION of the payload
+# would be the classic mistake (the artifact you measure is not the artifact you
+# ship), so the budget checker drives this mode rather than re-deriving sizes
+# from the files. Skips the fetch so it is offline-safe and instant.
+MEASURE = "--measure" in sys.argv
+# --v2 / --v1 force a document shape regardless of protocol.json. Only for
+# previewing one shape's payload against another shape's real documents, so a
+# migration can be sized before anything is migrated. The hook never passes it.
+FORCE_VERSION = 2 if "--v2" in sys.argv else (1 if "--v1" in sys.argv else None)
+
+
 def emit(text: str) -> None:
+    if MEASURE:
+        _emit_measurement(text)
     payload = {"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": text}}
     sys.stdout.write(json.dumps(payload))
+    sys.exit(0)
+
+
+def _emit_measurement(text: str) -> None:
+    """One line per injected section, then the total, as `chars<TAB>label`."""
+    for chunk in re.split(r"\n(?=### )", text):
+        label = chunk.split("\n", 1)[0].lstrip("# ").strip()
+        sys.stdout.write(f"{len(chunk)}\t{label[:90]}\n")
+    sys.stdout.write(f"{len(text)}\tTOTAL\n")
     sys.exit(0)
 
 
@@ -76,18 +101,28 @@ def emit(text: str) -> None:
 
 def remote_state(proj: str) -> tuple[int, int, bool, bool]:
     """(behind, ahead, dirty, fetch_ok). Fetches; never pulls — a dirty or
-    diverged tree needs a human decision, and post-merge hooks can run installs."""
+    diverged tree needs a human decision, and post-merge hooks can run installs.
+
+    `fetch_ok` is only True when currency was actually PROVEN: the fetch
+    succeeded AND the branch has an upstream to compare against. A branch with
+    no tracking ref used to report "current" — the rev-list failed, both counts
+    defaulted to 0, and the guard whose whole purpose is "a stale checkout looks
+    complete, not broken" printed a green tick it had not earned."""
+    if MEASURE:
+        return 0, 0, False, True
     fetch_rc, _ = run(["git", "fetch", "origin", "--prune"], proj, timeout=20)
     rc, counts = run(["git", "rev-list", "--left-right", "--count", "HEAD...@{u}"], proj)
     behind = ahead = 0
+    tracked = False
     if rc == 0 and counts:
         try:
             a, b = counts.split()
             ahead, behind = int(a), int(b)
+            tracked = True
         except ValueError:
             pass
     rc, porcelain = run(["git", "status", "--porcelain"], proj)
-    return behind, ahead, rc == 0 and bool(porcelain), fetch_rc == 0
+    return behind, ahead, rc == 0 and bool(porcelain), fetch_rc == 0 and tracked
 
 
 def upstream_state(proj: str, ref: str) -> tuple[int, str, bool]:
@@ -163,9 +198,47 @@ def truncate(block_text: str, cap: int) -> tuple[str, bool]:
     return f"{cut} …[TRUNCATED at {cap} chars — {extra} more in docs/SESSION_LEDGER.md; the item is over the cap and should be shortened]", True
 
 
-def open_ledger_view(text: str, cfg: dict) -> dict:
+def item_title(block: list[str], cap: int) -> str:
+    """One manifest line for an item: its first line, cut at a word boundary.
+
+    v2 injects this instead of the item's text. It only works if the first line
+    stands alone as a title, which is the one authoring rule v2 adds to the
+    ledger — measured on a real 88-item ledger, the titles average 111 chars
+    against items averaging 1,150, and they read fine because items already
+    open with their headline."""
+    s = re.sub(r"\*\*|`", "", block[0].lstrip())
+    s = re.sub(r"\s+", " ", s).strip()
+    return s if len(s) <= cap else s[:cap].rsplit(" ", 1)[0] + " …"
+
+
+def gating_ids(state_text: str, cfg: dict, limit: int) -> set[str]:
+    """Ledger IDs cited inside a NEXT ACTION section — the items v2 gives full
+    text to. The NEXT ACTION line is the selector: the choice is derived from
+    something already maintained rather than being a second marker to keep in
+    sync. Only DECLARED prefixes match, so `BUG-79` and `AVX-512` do not."""
+    pat = re.compile(r"\b(?:" + "|".join(id_prefixes(cfg)) + r")-\d+\b")
+    out: list[str] = []
+    capture = False
+    for ln in state_text.splitlines():
+        if ln.lstrip().startswith("#"):
+            capture = "next action" in ln.lower()
+            continue
+        if capture:
+            for hit in pat.findall(ln):
+                if hit not in out:
+                    out.append(hit)
+    return set(out[:limit])
+
+
+def open_ledger_view(text: str, cfg: dict, version: int = 1, gating: set[str] | None = None) -> dict:
+    """v1 injects every open item's text, truncated per item. v2 injects a
+    complete one-line manifest plus the FULL text of the items the NEXT ACTION
+    cites — rank for depth, never for presence. An item dropped from the
+    manifest would be an absence, and absences produce no signal."""
+    gating = gating or set()
     header, blocks = ledger_blocks(text)
     cap = int(cfg["ledger"]["item_max_chars"])
+    title_cap = int((cfg.get("payload") or {}).get("manifest_title_chars", 110))
     stale_days = int(cfg["ledger"]["stale_after_days"])
     today = _dt.date.today()
     names = track_names(cfg)
@@ -178,6 +251,7 @@ def open_ledger_view(text: str, cfg: dict) -> dict:
     order: list[str] = []
     stale: list[str] = []
     truncated = 0
+    expanded: list[str] = []
     for b in open_blocks:
         first = b[0]
         m = ITEM_RE.match(first.lstrip())
@@ -189,7 +263,14 @@ def open_ledger_view(text: str, cfg: dict) -> dict:
                     stale.append(item_id)
             except ValueError:
                 pass
-        text_block, was_cut = truncate("\n".join(b), cap)
+        if version >= 2:
+            if item_id in gating:
+                text_block, was_cut = "\n".join(b), False
+                expanded.append(item_id)
+            else:
+                text_block, was_cut = item_title(b, title_cap), False
+        else:
+            text_block, was_cut = truncate("\n".join(b), cap)
         truncated += int(was_cut)
         if multi_track(cfg):
             writer = pmap.get(m.group(2).upper()) if m else None
@@ -216,7 +297,11 @@ def open_ledger_view(text: str, cfg: dict) -> dict:
         wanted = [n.upper() for n in names] + ["SHARED (→all)", "UNASSIGNED (legacy L-* / no tag)"]
         order = [k for k in wanted if k in groups] + [k for k in order if k not in wanted]
 
-    parts = ["\n".join(header).rstrip()]
+    # v1 injected the ledger's whole header block — 3,071 chars of authoring
+    # rules on the live project — at every session start. Those rules are
+    # already in PROTOCOL.md, which is @imported every session, so it was a
+    # second copy of the same text competing for the same budget. v2 drops it.
+    parts = [] if version >= 2 else ["\n".join(header).rstrip()]
     for key in order:
         parts.append(f"\n#### {key} — {len(groups[key])} open\n" + "\n".join(groups[key]))
     return {
@@ -225,6 +310,7 @@ def open_ledger_view(text: str, cfg: dict) -> dict:
         "closed": closed,
         "truncated": truncated,
         "stale": stale,
+        "expanded": expanded,
     }
 
 
@@ -334,12 +420,14 @@ def main() -> None:
         )
 
     # 4. Happy path — build the payload.
+    version = FORCE_VERSION or protocol_version(cfg)
     parts: list[str] = ["## Auto-loaded session context (SessionStart hook)\n", global_note, cfg_note]
     parts.append(
         "✅ Fetched origin — checkout is current.\n"
         if fetch_ok
-        else "⚠️ **Could not reach origin** — the docs below are from the local checkout and their "
-        "currency is UNVERIFIED. Say so in the status report.\n"
+        else "⚠️ **Currency UNVERIFIED** — either origin could not be reached, or this branch has no "
+        "upstream to compare against (`git status -sb` says which). The docs below are the local "
+        "checkout's copy and may be a snapshot of the past. Say so explicitly in the status report.\n"
     )
 
     # Upstream drift (forks): reported, never acted on.
@@ -388,18 +476,26 @@ def main() -> None:
         )
 
     # CURRENT_STATE.
+    state_text = ""
     if state_path.exists():
         try:
-            parts.append("\n### docs/CURRENT_STATE.md\n" + state_path.read_text(encoding="utf-8").rstrip() + "\n")
+            state_text = state_path.read_text(encoding="utf-8")
         except OSError:
-            pass
+            state_text = ""
+    if state_text:
+        parts.append("\n### docs/CURRENT_STATE.md\n" + state_text.rstrip() + "\n")
 
-    # Ledger — open items only, truncated, grouped.
+    # Ledger — v1: every open item's text, truncated. v2: a complete manifest
+    # plus full text for the items the NEXT ACTION cites.
     ledger_path = pathlib.Path(proj) / "docs" / "SESSION_LEDGER.md"
     ledger_info = None
     if ledger_path.exists():
         try:
-            ledger_info = open_ledger_view(ledger_path.read_text(encoding="utf-8"), cfg)
+            gate = (
+                gating_ids(state_text, cfg, int((cfg.get("payload") or {}).get("max_gating_items", 5)))
+                if version >= 2 else set()
+            )
+            ledger_info = open_ledger_view(ledger_path.read_text(encoding="utf-8"), cfg, version, gate)
             cap = cfg["ledger"]["item_max_chars"]
             soft = cfg["ledger"]["open_soft_max"]
             extras = []
@@ -413,9 +509,24 @@ def main() -> None:
                     + ", ".join(ledger_info["stale"][:12])
                     + (" …" if len(ledger_info["stale"]) > 12 else "")
                 )
+            if version >= 2:
+                exp = ledger_info["expanded"]
+                head = (
+                    f"\n### docs/SESSION_LEDGER.md — MANIFEST of all {ledger_info['open']} open items "
+                    f"({ledger_info['closed']} closed omitted — history)\n"
+                    "Each line is an item's TITLE, not the item. "
+                    + (f"Full text is shown below for {', '.join(exp)} (cited by the NEXT ACTION). "
+                       if exp else "No item is expanded — the NEXT ACTION cites none. ")
+                    + "To read any other item in full, grep its ID in `docs/SESSION_LEDGER.md` — "
+                    "do that when you work on it, not before.\n"
+                )
+            else:
+                head = (
+                    f"\n### docs/SESSION_LEDGER.md — OPEN items only ({ledger_info['open']} open; "
+                    f"{ledger_info['closed']} closed line(s) omitted — closed items are history)\n"
+                )
             parts.append(
-                f"\n### docs/SESSION_LEDGER.md — OPEN items only ({ledger_info['open']} open; "
-                f"{ledger_info['closed']} closed line(s) omitted — closed items are history)\n"
+                head
                 + ("⚠️ " + "; ".join(extras) + "\n" if extras else "")
                 + ledger_info["text"].rstrip()
                 + "\n"
@@ -448,7 +559,15 @@ def main() -> None:
         try:
             entries = [ln for ln in handoff_path.read_text(encoding="utf-8").splitlines() if "|" in ln]
             if entries:
-                parts.append("\n### Last 5 lines of docs/HANDOFF_LOG.md\n" + "\n".join(entries[-5:]) + "\n")
+                # v1 injected the last 5 as a scannable index, which is why the
+                # summary had to be capped at ~300 chars. v2 injects ONE entry —
+                # yours — so it can be as long as the next session needs, and
+                # the cap goes away. Reading further back is a deliberate act.
+                if version < 2:
+                    parts.append("\n### Last 5 lines of docs/HANDOFF_LOG.md\n" + "\n".join(entries[-5:]) + "\n")
+                elif not multi_track(cfg):
+                    parts.append("\n### docs/HANDOFF_LOG.md — last entry (the handoff you are accepting)\n"
+                                 + entries[-1] + "\n")
                 if multi_track(cfg):
                     per: list[str] = []
                     for name in track_names(cfg):

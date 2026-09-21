@@ -47,19 +47,22 @@ If `.claude/protocol.json` declares two or more `tracks`: establish which track 
 ## Steps 1–7
 
 1. Read `docs/CURRENT_STATE.md` — the **📍 NEXT ACTION** line(s) above all (your track's, in multi-track repos) and the Shared block.
-2. Read the **open `[ ]` lines only** of `docs/SESSION_LEDGER.md`. Grep `- [ ]` rather than reading the whole file: closed lines keep their pre-closure text and are history, not context. Count the open items; note any that gate the NEXT ACTION (yours, `→all`, and unassigned legacy items in a multi-track repo). Items over the configured character cap are flagged — do not read past the cap unless the item is the next action.
-3. Read the last 5 lines of `docs/HANDOFF_LOG.md`, plus (multi-track) the last line whose track field is yours.
+2. **v2 (`protocol_version: 2`):** the hook injects a **manifest** — every open item's first line, plus the full text of the items the NEXT ACTION cites. Each manifest line is a TITLE, not the item. Do not read any other item now; grep its ID when you work on it. **v1:** read the open `[ ]` lines only (grep `- [ ]`; closed lines are history).
+3. Read your track's **newest handoff entry** — that is the handoff you are accepting. Do not read further back unless something in it does not parse.
 4. Read the **status spine in `ROADMAP.md`** (heading per `spine_heading`) — the single source of truth for which phase/block is CURRENT (per track, if marked).
 5. **Working-tree check** (Step 0.5 handled the remote). Run `git update-index --really-refresh > /dev/null 2>&1 || true` to clear phantom-dirty entries, then `git status` and `git log --oneline -5`. Changes surviving the refresh are real: surface them, since they mean the previous `/end` did not reach a clean tree — unless (multi-track) they sit in the other track's owned paths, in which case name them as theirs.
 6. If `protocol.json` sets `audit_command`, run it. Silent on green; mention only findings.
 7. **CROSS-CHECK (mandatory — the step that prevents drift).** Does the NEXT ACTION agree with (a) the spine's CURRENT marker (for your track), (b) the last HANDOFF line's "Next:" (your track's), (c) recent commits, and (d) no open ledger gate? **If any contradict, STOP and surface it — do not pick one and proceed.** A stale CURRENT_STATE leading with a minor loose end while the spine and handoff point at the real next work is exactly what this catches.
+
+8. **ACCEPT (mandatory).** Step 7 compares documents against each other — and documents that have all copied the same stale claim agree perfectly, so it can find disagreement but never staleness. Close that gap from the receiving side: **restate the NEXT ACTION in your own words, and name what would make it wrong** (the assumption it rests on, the thing you would check first). If the handoff entry cannot support a restatement, say so plainly — "the handoff was insufficient: it does not say X" is a recorded signal and the next wrap should fix it. Completeness belongs to both sessions, not just the one that wrote the handoff.
 
 Then report, 4 lines plus a sync line (5 plus track in multi-track repos):
 
 - **Track:** <name> *(multi-track only)*
 - Where we are (phase/block **name + number** from the spine)
 - What last session accomplished (your track's)
-- The single **NEXT ACTION** — or the flagged contradiction
+- The single **NEXT ACTION**, **as you restate it** (Step 8) — or the flagged contradiction
+- **Payload:** the session-start size against budget, when the hook reported one
 - Open ledger items: N (call out gates; multi-track: yours + `→all` + unassigned)
 - **Sync:** `synced to origin @ <short-sha>`, plus `(pulled N)` or `(⚠️ fetch failed — currency unverified)`; forks add `upstream: +N` or `current`
 

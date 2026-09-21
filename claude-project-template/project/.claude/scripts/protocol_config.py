@@ -36,6 +36,27 @@ DEFAULT_SKIP_PREFIXES = (
 )
 
 DEFAULTS: dict = {
+    # Which DOCUMENT SHAPE this project is on. 1 = the original (CURRENT_STATE
+    # injected whole, ledger items injected as truncated full text, last 5
+    # handoff lines). 2 = the budgeted shape (CURRENT_STATE is app state only,
+    # the ledger injects a one-line-per-item manifest plus full text for the
+    # items the NEXT ACTION cites, one handoff entry per track). The scripts
+    # read this so a migrated and an unmigrated project can both work.
+    "protocol_version": 1,
+    # The session-start injection budget. The total is what is measured and
+    # reported (check-payload-budget.py); per-part caps are hints. 25000 matches
+    # the ceiling Claude Code puts on its own auto-loaded MEMORY.md index.
+    # Every other cap in this protocol measures one input; this one measures
+    # what the model actually receives, which is the only number that stays
+    # true when the mass moves from one document to another.
+    "payload": {
+        "target_chars": 25000,
+        "warn_over": 1.0,
+        # How much of a ledger item's first line becomes its manifest entry.
+        "manifest_title_chars": 110,
+        # Cap on how many items get FULL text because the NEXT ACTION cites them.
+        "max_gating_items": 5,
+    },
     # The heading (case-insensitive substring) that opens the ROADMAP status spine.
     "spine_heading": "status at a glance",
     # Shell command run at /end Step 0c (build/drift/typecheck guard). "" = none.
@@ -66,8 +87,10 @@ DEFAULTS: dict = {
         "open_soft_max": 30,
         # Open items older than this are listed at /end as "route or close".
         "stale_after_days": 45,
-        # Closed [x]/[-] lines older than this are pruned at /end.
-        "prune_closed_after_days": 7,
+        # Closed [x]/[-] lines older than this MOVE to SESSION_LEDGER_CLOSED.md
+        # at /end. Never deleted: an ID that escaped into a commit subject, a
+        # handoff entry or a spine cell must stay resolvable forever.
+        "move_closed_after_days": 7,
     },
     # Parallel tracks. [] = single track (IDs are L-N, no ownership rules).
     # /end Step 0d (check-file-caps.py): line caps on the code files a session
@@ -115,7 +138,7 @@ def load_config(proj: str | None = None) -> tuple[dict, bool]:
         for key, value in raw.items():
             if key.startswith("$"):
                 continue  # $comment keys
-            if key in ("ledger", "file_caps") and isinstance(value, dict):
+            if key in ("ledger", "file_caps", "payload") and isinstance(value, dict):
                 cfg[key].update({k: v for k, v in value.items() if not k.startswith("$")})
             else:
                 cfg[key] = value
@@ -136,6 +159,28 @@ def load_config(proj: str | None = None) -> tuple[dict, bool]:
 
 def multi_track(cfg: dict) -> bool:
     return len(cfg.get("tracks") or []) > 1
+
+
+def protocol_version(cfg: dict) -> int:
+    """Document-shape generation. Unparseable or absent = 1 (the original)."""
+    try:
+        return int(cfg.get("protocol_version") or 1)
+    except (TypeError, ValueError):
+        return 1
+
+
+def id_prefixes(cfg: dict) -> list[str]:
+    """Declared track prefixes plus the legacy `L`, for matching ledger IDs in
+    prose. Using the DECLARED set rather than a generic [A-Z]{1,4}-\\d+ pattern
+    is what keeps `BUG-79` and `AVX-512` out of the results."""
+    seen: list[str] = []
+    for t in cfg.get("tracks") or []:
+        p = t.get("prefix")
+        if p and p.upper() not in seen:
+            seen.append(p.upper())
+    if "L" not in seen:
+        seen.append("L")
+    return seen
 
 
 def prefix_map(cfg: dict) -> dict[str, str]:
@@ -240,6 +285,8 @@ TEMPLATE_MANAGED = (
     ".claude/scripts/statusline.py",
     ".claude/scripts/scan-secrets.py",
     ".claude/scripts/check-file-caps.py",
+    ".claude/scripts/check-payload-budget.py",
+    ".claude/scripts/check-ledger-refs.py",
     ".claude/scripts/check-template-drift.py",
     ".claude/agents/planner.md",
     ".claude/agents/reviewer.md",

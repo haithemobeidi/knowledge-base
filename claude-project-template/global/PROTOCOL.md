@@ -18,7 +18,9 @@ Every rule here traces to a measured failure on a real project:
 3. **Heavy end-session ceremony got skipped.** → Automation does the reading; the human-visible part is a 4-line report.
 4. **End-of-session recall lost facts** (a passed test vanished from a wrap; shipped work sat listed as open; the same work was recorded twice). → The ledger is written at the moment of the event, and post-wrap work gets a delta-only mini-wrap.
 5. **Two concurrent sessions collided** (seven ID-collision repair commits in one month; the other session's files staged by accident). → Parallel tracks are declared, IDs are prefixed per track, ownership is explicit.
-6. **The ledger grew into what it was meant to prevent** (99 open items averaging 2,500 characters, ~250KB injected at every session start). → Hard size caps, truncation at injection, age flags.
+6. **The ledger grew into what it was meant to prevent** (99 open items averaging 2,500 characters, ~250KB injected at every session start). → Size caps and truncation at injection.
+7. **Capping the ledger just moved the mass.** Twelve days after those caps landed, `CURRENT_STATE.md` had gone from 5,968 characters to 92,900 and session start was injecting 163,478 — five times a normal full startup payload. A per-contributor cap relocates bloat; it does not remove it. → One budget on the **assembled payload**, measured and printed every session; per-document caps demoted to hints; a manifest instead of full text. General lesson: measure the total the consumer receives, not the inputs feeding it.
+8. **A stale document cannot be caught by comparing it to other documents.** 146 ledger IDs were cited in one CURRENT_STATE and 65 were already struck; copy-through is the default editing action and nothing re-verified it. The cross-check could not see it, because stale docs agree with each other perfectly. → `check-ledger-refs.py`, plus a receiver read-back at start.
 
 ---
 
@@ -44,13 +46,33 @@ Every rule here traces to a measured failure on a real project:
 | File | Purpose | When updated |
 |---|---|---|
 | `docs/CODEBASE_INDEX.md` | One line per meaningful file | When an unindexed file is created or edited (hook-enforced at `/end`) |
-| `docs/CURRENT_STATE.md` | Rolling snapshot: NEXT ACTION (one per track) + this-session deltas + shared state | At `/end` (overwrite; re-read from disk first) |
-| `docs/HANDOFF_LOG.md` | Append-only one-line-per-session history | At `/end` (append) |
-| `docs/SESSION_LEDGER.md` | Append-and-strike ledger of open session-scoped items | **At the moment** an item is queued or resolved; reconciled at `/end` |
+| `docs/CURRENT_STATE.md` | **The state of the APP** — version, what is shipped, build status, NEXT ACTION per track, blockers. No session narrative, no restated ledger statuses | At `/end` (overwrite; re-read from disk first) |
+| `docs/HANDOFF_LOG.md` | Append-only, one entry per session, **I-PASS shape**. Only the newest entry per track is injected, so there is no length cap | At `/end` (append) |
+| `docs/SESSION_LEDGER.md` | Append-and-strike ledger of open loops. **First line is a self-contained title; no cap on an item** | **At the moment** an item is queued or resolved; reconciled at `/end` |
+| `docs/SESSION_LEDGER_CLOSED.md` | Where struck lines MOVE to. Never injected, grows forever | At `/end`, per `ledger.move_closed_after_days` |
 | `ROADMAP.md` status spine | Source of truth for phase/block status | When status actually changes |
 | `.claude/pending-index-updates.txt` | Transient queue of unindexed paths | Auto (hook) |
 
 No per-session handoff snapshot files: past projects accumulated 30+ and nobody read past the newest.
+
+**Closed ledger lines move; they are never deleted.** An ID that escaped into a commit subject, a handoff entry or a spine cell can never be reclaimed, only aliased — deleting its line leaves every one of those pointing at nothing. On one project, pruning left 51 of 72 spine IDs unresolvable.
+
+---
+
+## The injection budget — the one number that stays true
+
+**Every session start injects a payload, and that payload has a budget: `payload.target_chars`, default 25,000** (the ceiling Claude Code puts on its own auto-loaded `MEMORY.md`). The hook measures it and `check-payload-budget.py` reports it.
+
+Every other cap here measures ONE input — an item, a cell, a file. Only this one measures what the model actually receives, and that is the only number that stays honest when the mass moves from one document to another. It moved once already: the 2026-09-08 ledger caps worked, the ledger fell from 397KB to 259KB, and twelve days later `CURRENT_STATE.md` had gone from 5,968 characters to 92,900 and the injection was 163,478 — about five times a normal full Claude Code startup payload. Nobody saw it, because the metric being watched had improved.
+
+**When the budget is exceeded, shrink the contributor; never raise the budget.** The budget is what stops the next document growing into the space a capped one vacated.
+
+What is injected, and what is not:
+
+- **Injected:** CURRENT_STATE whole (it is small by construction) · a **manifest** of every open ledger item, one title line each · the **full text** of only the items the NEXT ACTION cites · the spine · your track's newest handoff entry · the directive.
+- **Not injected, read on demand:** every other ledger item (grep its ID) · closed items · older handoff entries · CODEBASE_INDEX · notes, bug and backlog docs.
+
+A document that is never injected is free and may grow without limit. That is why nothing needs to be summarized or deleted to stay in budget.
 
 ---
 
@@ -71,9 +93,10 @@ Mostly automatic: the `SessionStart` hook runs the worktree guard, checks the gl
 0. **Worktree/branch guard** — never work from `.claude/worktrees/`, a `claude/*` branch, or a branch listed in `protocol.json` → `protected_branches` (a fork's read-only `main`).
 0.5 **Sync guard** — `git fetch` before reading any doc. Behind + clean → `git pull --ff-only`. Behind + dirty, or diverged → stop and surface. Offline → proceed, report currency as unverified. `git status` saying "up to date" without a fetch proves nothing; a stale checkout looks complete, not broken. If `upstream_ref` is set (a fork), that remote is fetched too and the drift count is **reported, never acted on** at start — catching up is a session decision at a quiet point.
 0.7 **Track gate** (multi-track repos only) — know which track this session is before reading or editing anything (see "Parallel tracks").
-1–5. Read CURRENT_STATE (your track's NEXT ACTION), the open ledger items, the last handoff lines (yours), the spine; run the working-tree check and the project's `audit_command` if set.
-6. **CROSS-CHECK (mandatory):** NEXT ACTION vs spine CURRENT vs last handoff "Next:" vs open gates. Contradiction → stop and surface; never pick one silently.
-7. Report: track (if any) / where we are (name + number) / last session's result / the single NEXT ACTION / open items with gates / **sync line** stating currency.
+1–5. Read CURRENT_STATE (your track's NEXT ACTION), the ledger manifest, your track's newest handoff entry, the spine; run the working-tree check and the project's `audit_command` if set.
+6. **CROSS-CHECK (mandatory):** NEXT ACTION vs spine CURRENT vs the handoff's "Next:" vs open gates. Contradiction → stop and surface; never pick one silently.
+7. **ACCEPT (mandatory).** The cross-check compares documents against each other, and stale documents agree with each other perfectly — so it can detect disagreement and never staleness. The receiver's half closes that: **restate the NEXT ACTION in your own words, and name what would make it wrong.** If the handoff entry cannot support a restatement, say the handoff was insufficient — that is a recorded signal, not a shrug. Completeness is shared between the session that wrote the handoff and the session accepting it, which is how every mature handover protocol assigns it.
+8. Report: track (if any) / where we are (name + number) / last session's result / the single NEXT ACTION **as you restate it** / open items with gates / **sync line** stating currency / **payload size** against budget.
 
 ---
 
@@ -93,9 +116,11 @@ Mostly automatic: the `SessionStart` hook runs the worktree guard, checks the gl
 - The moment work is queued or deferred ("next session", "before release", "check later", a rider, a gate) → append a `[ ]` line right then.
 - The moment it resolves → strike right then: `[x]` + `→ DONE <date>: <one line>`, or `[-]` + reason.
 - **Worthiness — all four must hold for a line to earn an ID:** (1) it is an open loop a future session must act on, with a concrete done-condition; (2) it is not tracked elsewhere (bugs → the bug doc, deferred features → the backlog, status → the spine); (3) it cannot just be done now (under ~10 minutes ⇒ do it); (4) one ID per loop — sub-facts ride the parent.
-- **Size (hard):** one item ≤ `ledger.item_max_chars` (default 600). Analysis longer than that goes to a bug entry, a backlog entry, a `docs/notes/<ID>.md`, or a DECISIONS entry; the ledger line keeps the loop and a pointer. The start hook truncates over-cap items and names them. A closed line's evidence is one line.
-- **Count (soft):** over `open_soft_max` (default 30) → `/end` says so and offers a triage pass. Items older than `stale_after_days` (default 45) are listed at `/end` as route-or-close.
+- **The first line is a self-contained TITLE.** Session start injects a manifest built from first lines, so a future session decides whether to open an item from that line alone. Lead with the headline; analysis goes on continuation lines. This is the rule the whole budget rests on.
+- **No cap on an item.** Items stay whole, here, forever — nothing is shortened, summarized or moved to a side file. (The old 600-char cap existed to protect the injection; the manifest protects it now. A controlled study of progressive disclosure found one routing level helps and a second *"never helps and sometimes breaks accuracy outright"* — so: manifest line → whole item, no third hop.)
+- **Count (soft):** over `open_soft_max` (default 30), `/end` routes or closes **the two oldest stale items** — a rate, not a sitting. A level-based cap exceeded 3× for months is not a cap; two items is cheap enough that nobody wants to skip it.
 - Never strike a line you merely don't recognise; never renumber; IDs are permanent.
+- **Citations are provenance, not resolution.** Items record where they came from (`from D-4 Pause D`, `user mid-M-9 Pause B`) and what they wait on (`After M-35`). A cited item closing does NOT close the citing item — a child is spun out precisely so it outlives its parent. Only the done-condition closes an item.
 
 **Check stale messages before re-changing:** after a fix lands, confirm the issue is still current before changing the code again — the user may have queued the message before testing.
 
@@ -118,13 +143,15 @@ Declared in `protocol.json` → `tracks` (name, ID prefix, owned paths) and `sha
 
 ## Session end (`/end`)
 
-0. Worktree guard; phantom-dirty refresh; **project check** (`check_command`, stop on failure); **secret scan** (`secret_scan`, stop on findings).
+0. Worktree guard; phantom-dirty refresh; **project check** (`check_command`, stop on failure); **secret scan** (`secret_scan`, stop on findings); file caps + twins.
 1. Index: drain the pending queue; diff backstop; phantom-row check.
-1d. Reconcile the ledger from disk BEFORE writing CURRENT_STATE: disposition what you touched, append what you queued, prune closed lines older than `prune_closed_after_days`, report count vs soft max and stale items.
-2. Reconcile the spine (short cells), then re-read and overwrite CURRENT_STATE (your track's section only in multi-track repos).
-3. Append ONE handoff line (~300-char summary cap; track field in multi-track repos).
-4. Commit `Session: …` (with `(track)` if any); push per policy; **clean-tree guarantee** — categorise every remaining dirty path; confirm the mainline is published.
-5. Report: accomplished / next / watch / open items (+ any commits pushed that were not yours).
+1d. Reconcile the ledger from disk BEFORE writing CURRENT_STATE: disposition what you touched, append what you queued (**first line = title**), **move** closed lines older than `move_closed_after_days` to `SESSION_LEDGER_CLOSED.md`, route or close the two oldest stale items.
+1e. **`check-ledger-refs.py`** — every ledger ID cited in CURRENT_STATE and the spine, classified open / struck / absent. A *struck* ID still described as pending is the copy-forward failure this step exists to catch; fix it in the rewrite below, or ledger it for the track that owns that section.
+2. Reconcile the spine (short cells), then re-read and overwrite CURRENT_STATE — **app state only** (your track's section in multi-track repos). Derived fields come from `end-derive.py`, not from recall.
+3. Append ONE handoff entry in **I-PASS shape**: Status / Changed / Next / **If it fails** / **Confirm**. Delta only — the reader has CURRENT_STATE. No length cap: only this entry gets injected next session.
+4. **`check-payload-budget.py`** — report the assembled payload against `payload.target_chars`. Over budget → name the largest contributor and shrink it; never raise the budget.
+5. Commit `Session: …` (with `(track)` if any); push per policy; **clean-tree guarantee** — categorise every remaining dirty path; confirm the mainline is published.
+6. Report: accomplished / next / watch / open items / payload size (+ any commits pushed that were not yours).
 
 **Between sessions:** `/clear`, new session, the hook does the rest. Do not `/start` in the session that just ran `/end`. If one small follow-up is still coming, do not `/end` yet — wrap once at the real stopping point (the mini-wrap below is for work that arrives *after* a wrap, not a licence to wrap early).
 
@@ -140,7 +167,9 @@ Declared in `protocol.json` → `tracks` (name, ID prefix, owned paths) and `sha
 | `PostToolUse` (`Write\|Edit\|Bash\|PowerShell`) | `track-new-file.py` | Queues unindexed paths (skip prefixes from `protocol.json`). Write/Edit queue the touched file; a shell call queues every untracked file in the repo afterwards, because scripts, generators, heredocs and `git mv` create files the file tools never see (24 files slipped past the old `Write\|Edit` matcher in one session) |
 | `Stop` | `stop-clean-tree-check.py` | Blocks a stop only when a Session commit just landed and files this track is responsible for are still dirty |
 
-Not hooks: `validate-index.py` (phantom rows, `/end` 1c), `scan-secrets.py` (content scan, `/end` 0c; `--history` audits everything pushable), `check-file-caps.py` (line caps + twin basenames over the session's touched code, `/end` 0d; `--all` for the audit sitting), `check-template-drift.py` (resync), `statusline.py` (prompt line). All scripts are silent on failure and never edited per project — `protocol.json` carries the differences.
+Not hooks: `validate-index.py` (phantom rows, `/end` 1c), `scan-secrets.py` (content scan, `/end` 0c; `--history` audits everything pushable), `check-file-caps.py` (line caps + twin basenames, `/end` 0d; `--all` for the audit sitting), **`check-ledger-refs.py`** (struck IDs still cited in the state docs, `/end` 1e), **`check-payload-budget.py`** (the assembled injection vs its budget, `/end` 4 — it drives `session-start-context.py --measure` so it measures the real payload, not a reconstruction of it), `check-template-drift.py` (resync), `statusline.py` (prompt line). All scripts are silent on failure and never edited per project — `protocol.json` carries the differences.
+
+**Validating a check:** never against this template. Its state docs are placeholders, so any growth or staleness check run there examines an empty set and goes green forever — a probe only carries information if it can come back RED. Validate against a real project's real documents, and make the check fail on purpose once before trusting it.
 
 ---
 

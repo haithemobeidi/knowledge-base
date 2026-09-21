@@ -1,6 +1,17 @@
 {
   "$comment": "Per-project settings for the session protocol. EDIT THIS FILE, never the scripts in .claude/scripts/ — they are byte-identical across projects and checked against the template. Every key is optional; missing keys fall back to the defaults shown here. Keys starting with $ are comments.",
 
+  "$protocol_version": "Which DOCUMENT SHAPE this project is on. 1 = the original (CURRENT_STATE injected whole, ledger items injected as truncated full text, last 5 handoff lines). 2 = the budgeted shape (CURRENT_STATE is app state only; the ledger injects a one-line-per-item manifest plus full text for the items the NEXT ACTION cites; one handoff entry per track, in I-PASS shape). Set to 2 ONLY after running migrate-docs-v2.py — the scripts read this to decide how to render, and flipping it without migrating the documents just renders unmigrated docs a different way.",
+  "protocol_version": 1,
+
+  "$payload": "The session-start injection budget. target_chars is the whole assembled payload, not one document — it is the only cap here that stays honest when the mass moves between documents (see PROTOCOL.md 'Why this exists' #7). 25000 matches the ceiling Claude Code puts on its own auto-loaded MEMORY.md. manifest_title_chars is how much of a ledger item's first line becomes its manifest entry; max_gating_items caps how many items get FULL text because the NEXT ACTION cites them.",
+  "payload": {
+    "target_chars": 25000,
+    "warn_over": 1.0,
+    "manifest_title_chars": 110,
+    "max_gating_items": 5
+  },
+
   "$spine_heading": "Case-insensitive text of the ROADMAP.md heading that opens the status spine table. The start hook injects everything from that heading to the next '## '.",
   "spine_heading": "status at a glance",
 
@@ -25,12 +36,12 @@
   "$index_skip_prefixes": "Project-relative path prefixes (POSIX) the codebase-index hook ignores, on top of the built-in ones (.claude/, node_modules/, dist/, build/, target/, .next/, __pycache__/). Put generated code here, e.g. \"apps/desktop/src-tauri/gen/\".",
   "index_skip_prefixes": [],
 
-  "$ledger": "Size rules for docs/SESSION_LEDGER.md. item_max_chars is a HARD cap on one item's text (the start hook truncates over it); open_soft_max is a target count reported at /end; stale_after_days lists old open items at /end as route-or-close; prune_closed_after_days removes struck lines at /end (history lives in git).",
+  "$ledger": "Rules for docs/SESSION_LEDGER.md. v2 has NO cap on an item — items stay whole, and the manifest is what protects the injection (item_max_chars is read only by v1 projects). open_soft_max is the count above which /end routes or closes the two oldest stale items, as a rate rather than a sitting. stale_after_days is what counts as old. move_closed_after_days MOVES struck lines to docs/SESSION_LEDGER_CLOSED.md — never deletes them, because an ID cited in a commit subject or a handoff entry must stay resolvable forever.",
   "ledger": {
     "item_max_chars": 600,
     "open_soft_max": 30,
     "stale_after_days": 45,
-    "prune_closed_after_days": 7
+    "move_closed_after_days": 7
   },
 
   "$file_caps": "/end Step 0d (check-file-caps.py) — line caps on the CODE files this session touched (since the last wrap) and a same-basename twin check for new files. soft = flagged and put on the ledger (default 500); hard = the wrap stops (default 800); extensions = what counts as code (defaults cover TS/JS, Kotlin, Rust, Python, Swift, Java, Go, CSS, HTML, Vue, Svelte); skip_prefixes = paths the caps ignore on top of index_skip_prefixes, e.g. design prototypes or vendored code.",
