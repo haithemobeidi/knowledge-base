@@ -72,6 +72,29 @@ python .claude/scripts/scan-secrets.py --history      # once, on migration
 
 Remove `tmp-hook-check.md` and its pending line. Then start a fresh session and confirm the injected context shows the tracks (if any), the track gate, and the grouped ledger.
 
+## 6b — v1 document shapes → v2 (the budgeted shape)
+
+Separate from the layering migration above, and safe to do later. A project on `protocol_version: 1` keeps working indefinitely; v2 is opt-in per project.
+
+**Do not run this while another session is open in the same checkout.** Use `--out <dir>` outside the repo if one is.
+
+```bash
+python .claude/scripts/check-template-drift.py --sync     # get the v2 scripts first
+python .claude/scripts/migrate-docs-v2.py --report        # triage table only, writes nothing
+python .claude/scripts/migrate-docs-v2.py                 # writes docs/*.new.md
+```
+
+The script does the mechanical half and refuses the rest:
+
+- **Session narrative → handoff entries**, joined on the session ordinal ("153rd"). A block with no matching handoff line is reported and left in place, never guessed at and never summarized.
+- **Closed ledger lines → `SESSION_LEDGER_CLOSED.md`**, moved, not deleted.
+- **Everything awaiting a ruling** (the Shared block, "things to watch", loose ends) is parked **verbatim** in the archive under "Parked pending a ruling". It prints a numbered table; each bullet is (K) a standing fact that goes back into CURRENT_STATE, (L) a live loop that becomes a ledger item, or (A) history that stays parked. Take it to the user as one table, the same way the legacy `→track` tags were done in §4.
+- It prints a **conservation check** — characters that left CURRENT_STATE versus characters that arrived in the archive. A large positive delta means something was dropped rather than moved; do not use that output.
+
+Then, by hand: apply the rulings, fill CURRENT_STATE's new **Shipped** section (it has no v1 source), replace the originals with the `.new.md` files, and **only then** set `protocol_version: 2`. The script never flips it, because rendering unmigrated documents in the v2 shape just renders them differently.
+
+Finally: `python .claude/scripts/check-payload-budget.py`. Over budget after migrating usually means the ledger's open count, not the documents — shrink the contributor, never the budget.
+
 ## 7 — Commit
 
 Single track: `Session: protocol migrated to the global layer`. Multi-track: `Session (<track>): …`. Push per `push_policy`. Record the migration in `DECISIONS.md` (one entry: what moved where, the caps chosen, the tracks declared).

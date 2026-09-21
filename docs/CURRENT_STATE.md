@@ -20,7 +20,11 @@ _Last updated: 2026-09-21 01:05_
 
 ## 📍 NEXT ACTION
 
-Write `migrate-docs-v2.py`, then migrate Playmoir/Checkpoint: `check-template-drift.py --sync`, run the migration to `.new` files for review, triage the 38 "Things to watch" bullets with the user, then flip `protocol_version` to 2 and re-measure the payload.
+Migrate Playmoir/Checkpoint to v2, in a session where no other session is open in that checkout: `check-template-drift.py --sync`, run `migrate-docs-v2.py`, take the 62-bullet triage table to the user (K/L/A per bullet), fill the new **Shipped** section by hand, replace the originals, then set `protocol_version: 2`.
+
+Dry run already done (2026-09-21, output in a scratchpad that will not survive — re-run it): **167,474 → 31,004 chars, ~41,000 → ~7,751 tokens.** CURRENT_STATE 95,107 → 8,939. Struck-ID citations 150 → 20. Conservation checked: 90,453 left CURRENT_STATE, 91,698 arrived in the archive.
+
+Still 124% of the 25,000 budget afterwards, and the largest contributor is then the ledger manifest (12,590 chars, 87 open items). Getting under needs the one-time ledger triage that has been deferred as Playmoir's L-114 — the v2 two-per-wrap rate would take ~29 sessions on its own. **Shrink the contributor; do not raise the budget.**
 
 ## Template rollout
 
@@ -46,14 +50,16 @@ format, the ACCEPT step, and two v1 bug fixes. Reasoning and sources are in
 **v2 is inert until a project opts in.** `protocol_version` defaults to 1, so a
 project that syncs the scripts behaves exactly as it did before.
 
-Not built: `migrate-docs-v2.py`, `end-derive.py` (the derived build-status and
-changed-files fields), and the `SESSION_LEDGER_CLOSED.md` move at `/end` — that
-one is specified in `end.md` Step 1d.4 but has no script behind it yet, which by
-this protocol's own standard means it will not happen.
+`migrate-docs-v2.py` is written and dry-run against Playmoir. Not built:
+`end-derive.py` (the derived build-status and changed-files fields), and the
+recurring `SESSION_LEDGER_CLOSED.md` move at `/end` — the migration script does
+the one-time move, but the ongoing one is specified in `end.md` Step 1d.4 with
+no script behind it, which by this protocol's own standard means it will not
+happen.
 
 ## Open loops
 
-- `migrate-docs-v2.py` — not written
+- `migrate-docs-v2.py` — written; dry-run verified against Playmoir, not yet applied
 - `end-derive.py` — not written
 - The closed-line move is prose-only, no script
 - Three KB lessons are owed from this work: the shared-payload-budget lesson

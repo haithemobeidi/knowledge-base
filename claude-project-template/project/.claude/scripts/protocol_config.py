@@ -287,6 +287,7 @@ TEMPLATE_MANAGED = (
     ".claude/scripts/check-file-caps.py",
     ".claude/scripts/check-payload-budget.py",
     ".claude/scripts/check-ledger-refs.py",
+    ".claude/scripts/migrate-docs-v2.py",
     ".claude/scripts/check-template-drift.py",
     ".claude/agents/planner.md",
     ".claude/agents/reviewer.md",
