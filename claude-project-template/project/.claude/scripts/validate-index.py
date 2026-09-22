@@ -19,6 +19,18 @@ import pathlib
 import re
 import sys
 
+# Windows consoles default to a legacy code page (cp1252 here), and every
+# document this toolchain prints is full of arrows, em dashes and smart
+# quotes. Without this the script dies with UnicodeEncodeError mid-report, or
+# silently mangles characters — both seen live on 2026-09-22, which is what
+# prompted this. stdout may be a pipe with no reconfigure(), hence the guard.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
+
 # Matches the first backtick-quoted segment in a Markdown table row:
 #   | `path/to/file` | Description |
 ROW_RE = re.compile(r"^\|\s+`([^`]+)`\s+\|")

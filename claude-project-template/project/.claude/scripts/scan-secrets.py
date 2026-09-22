@@ -38,6 +38,18 @@ import re
 import subprocess
 import sys
 
+# Windows consoles default to a legacy code page (cp1252 here), and every
+# document this toolchain prints is full of arrows, em dashes and smart
+# quotes. Without this the script dies with UnicodeEncodeError mid-report, or
+# silently mangles characters — both seen live on 2026-09-22, which is what
+# prompted this. stdout may be a pipe with no reconfigure(), hence the guard.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
+
 # Each rule is (name, pattern, value_group). Patterns target credential SHAPES
 # that are hard to produce by accident, rather than the word "secret" near an
 # assignment — the latter drowns real findings in noise.

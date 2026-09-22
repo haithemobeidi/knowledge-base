@@ -36,6 +36,18 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from protocol_config import load_config, project_dir  # noqa: E402
 
+# Windows consoles default to a legacy code page (cp1252 here), and every
+# document this toolchain prints is full of arrows, em dashes and smart
+# quotes. Without this the script dies with UnicodeEncodeError mid-report, or
+# silently mangles characters — both seen live on 2026-09-22, which is what
+# prompted this. stdout may be a pipe with no reconfigure(), hence the guard.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
+
 ARCHIVE_HEADER = """# Closed ledger items
 
 Moved out of `SESSION_LEDGER.md` so the working file stays small, and kept so
