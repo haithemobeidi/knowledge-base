@@ -101,6 +101,8 @@ The **"status at a glance" spine table in `ROADMAP.md`** is the sole answer to "
 
 **Spine cells stay short:** a status marker, the gate holding the item open, at most a pointer. Session history goes to `HANDOFF_LOG.md`. (One cell grew to 62KB of narrative and rode into every session start; the hook now warns at 1,500 characters.)
 
+**The spine never names next work.** What a track does next, and what gates its next release, live in CURRENT_STATE's NEXT ACTION and nowhere else; a spine cell that copies them goes stale the first time a mini-wrap changes the NEXT ACTION, because a mini-wrap does not touch the spine. (One project's start cross-check flagged spine-vs-NEXT-ACTION disagreement five sessions running, every time from this copy.)
+
 ---
 
 ## Session start
@@ -172,7 +174,7 @@ Declared in `protocol.json` → `tracks` (name, ID prefix, owned paths) and `sha
 
 **Between sessions:** `/clear`, new session, the hook does the rest. Do not `/start` in the session that just ran `/end`. If one small follow-up is still coming, do not `/end` yet — wrap once at the real stopping point (the mini-wrap below is for work that arrives *after* a wrap, not a licence to wrap early).
 
-**Post-wrap work → mini-wrap (non-negotiable):** disposition/append ledger lines → ONE delta-only handoff line → CURRENT_STATE only if NEXT ACTION or build status changed → `Session followup:` commit, push per policy, clean tree. Never a second full re-summary.
+**Post-wrap work → mini-wrap (non-negotiable):** disposition/append ledger lines → ONE delta-only handoff line → CURRENT_STATE only if NEXT ACTION or build status changed (and if the NEXT ACTION changed, check your track's spine cell does not restate it) → `Session followup:` commit, push per policy, clean tree. Never a second full re-summary.
 
 ---
 
