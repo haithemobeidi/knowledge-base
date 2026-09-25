@@ -42,7 +42,7 @@ Every file the later steps read is a tracked repo file. Reading them from a chec
 
 ## Step 0.7 — Track gate (multi-track repos only)
 
-If `.claude/protocol.json` declares two or more `tracks`: establish which track this session is on **before reading or editing anything**. Take it from the user's first message if stated; otherwise ask ("Which track is this session: desktop or mobile?") and wait. Everything below is scoped to your track — its NEXT ACTION section, its ID prefix, its last handoff line, its owned paths.
+If `.claude/protocol.json` declares two or more `tracks`: establish which track this session is on **before reading or editing anything**. Take it from the user's first message if stated; otherwise ask with the **AskUserQuestion picker** (one option per declared track, so the user clicks instead of typing; never a plain-text question) and wait. Everything below is scoped to your track — its NEXT ACTION section, its ID prefix, its last handoff line, its owned paths.
 
 ## Steps 1–7
 

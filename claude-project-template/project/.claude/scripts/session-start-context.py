@@ -641,6 +641,7 @@ def main() -> None:
         gate = (
             f"0. **TRACK GATE (before anything else).** This repo runs parallel tracks ({names}). If the "
             "user's first message names the track this session is on, adopt it. Otherwise ASK which track "
+            "with the AskUserQuestion picker (one option per track, never a plain-text question) "
             "and WAIT — do not read, edit, or report until you know. Everything below is scoped to YOUR "
             "track: your NEXT ACTION section, your ledger prefix, your last handoff line, your owned paths.\n"
         )
