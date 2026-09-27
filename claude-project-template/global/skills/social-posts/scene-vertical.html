@@ -1,0 +1,85 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Social scene</title>
+<style>
+  :root { --ground: #0E0C0E; --text: #F2EEF2; --muted: rgba(242,238,242,0.68); }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1080px; height: 1920px; overflow: hidden; background: var(--ground); }
+  .scene { position: relative; width: 1080px; height: 1920px; overflow: hidden; background: var(--ground); }
+  .field { position: absolute; inset: -200px; filter: blur(70px); }
+  .shade { position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(14,12,14,0.35) 0%, rgba(14,12,14,0.05) 40%, rgba(14,12,14,0.55) 100%); }
+  /* Copy inside Meta's Reels safe box: top 14% (269px), sides 6% (65px). */
+  .copy { position: absolute; left: 90px; right: 90px; top: 290px; text-align: center; z-index: 2; }
+  .kicker { font-family: display, sans-serif; font-weight: 600; font-size: 26px; letter-spacing: 0.34em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 22px; }
+  .title { font-family: body, sans-serif; font-weight: 700; font-size: 76px; line-height: 1.05; color: var(--text);
+    text-shadow: 0 4px 30px rgba(0,0,0,0.55); }
+  .sub { font-family: body, sans-serif; font-size: 34px; line-height: 1.3; color: var(--muted); margin-top: 18px; }
+  /* Solid behind every line of copy, then a short fade: a thinner scrim lets
+     the recording's own text show through the title (first Playmoir post). */
+  .scrim { position: absolute; inset: 0 0 auto 0; height: 860px; z-index: 1;
+    background: linear-gradient(180deg, rgba(14,12,14,0.96) 0%, rgba(14,12,14,0.96) 74%, rgba(14,12,14,0) 100%); }
+  .card { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 0 110px; }
+  .word { font-family: display, sans-serif; font-weight: 700; font-size: 96px; letter-spacing: 0.14em; color: var(--text); }
+  .tag { font-family: body, sans-serif; font-size: 44px; color: var(--muted); margin-top: 26px; }
+  .hook { font-family: body, sans-serif; font-weight: 700; font-size: 84px; line-height: 1.08; color: var(--text); }
+  /* Review overlay only (&zones=1): what each app covers. Never in a build. */
+  .zone { position: absolute; z-index: 9; }
+  .ig { background: rgba(255,40,60,0.28); }
+  .tt { border: 4px dashed #3CF0FF; }
+</style>
+<script>
+  // ?config=<file url of the project's social config .js> — loaded before the body script runs.
+  const Q = new URLSearchParams(location.search);
+  document.write(`<script src="${Q.get("config")}"><\/script>`);
+</script>
+</head>
+<body>
+<div class="scene" id="scene"><div class="field" id="field"></div><div class="shade" id="shade"></div></div>
+<script>
+  // &s=<scene index> | &hook=1   &top=1: transparent layer (scrim + copy) laid over a live clip
+  // &still=<image url>: a still under the copy, for layout review   &zones=1: safe-zone overlay
+  const C = window.SOCIAL;
+  const base = new URL(".", Q.get("config")).href;
+  const url = (p) => new URL(p, base).href;
+  const root = document.documentElement.style;
+  root.setProperty("--accent", C.brand.accent);
+  const fonts = [["display", C.brand.fonts.display], ["body", C.brand.fonts.body]].filter(([, f]) => f);
+  document.head.insertAdjacentHTML("beforeend", "<style>" +
+    fonts.map(([n, f]) => `@font-face{font-family:${n};src:url("${url(f)}");font-weight:100 900}`).join("") + "</style>");
+  const scene = document.getElementById("scene");
+  const s = Q.get("hook") ? { hook: true, color: C.hookColor || C.scenes.find((x) => x.card).color } : C.scenes[Number(Q.get("s") || 0)];
+  if (Q.get("top")) {
+    document.documentElement.style.background = document.body.style.background = scene.style.background = "transparent";
+    document.getElementById("field").remove();
+    document.getElementById("shade").remove();
+  } else {
+    const [a, b] = s.color;
+    document.getElementById("field").style.background =
+      `radial-gradient(60% 45% at 30% 30%, ${a}, transparent 70%), radial-gradient(60% 45% at 70% 70%, ${b}, transparent 70%)`;
+  }
+  if (s.hook) {
+    scene.insertAdjacentHTML("beforeend", `<div class="card"><div class="hook">${C.hook}</div></div>`);
+  } else if (s.card) {
+    scene.insertAdjacentHTML("beforeend", `<div class="card"><div class="word">${C.brand.word}</div><div class="tag">${s.tag}</div></div>`);
+  } else {
+    const still = Q.get("still") && !Q.get("top")
+      ? `<div style="position:absolute;inset:0;background:#000 url('${Q.get("still")}') center/cover"></div>` : "";
+    scene.insertAdjacentHTML("beforeend", still + `<div class="scrim"></div><div class="copy">` +
+      `<div class="kicker">${s.kicker}</div><div class="title">${s.title}</div><div class="sub">${s.sub}</div></div>`);
+  }
+  if (Q.get("zones")) {
+    scene.insertAdjacentHTML("beforeend",
+      `<div class="zone ig" style="left:0;top:0;width:1080px;height:269px"></div>` +
+      `<div class="zone ig" style="left:0;top:1248px;width:1080px;height:672px"></div>` +
+      `<div class="zone ig" style="left:0;top:269px;width:65px;height:979px"></div>` +
+      `<div class="zone ig" style="left:1015px;top:269px;width:65px;height:979px"></div>` +
+      `<div class="zone tt" style="left:60px;top:130px;width:880px;height:1310px"></div>`);
+  }
+</script>
+</body>
+</html>
