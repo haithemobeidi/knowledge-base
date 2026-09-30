@@ -38,6 +38,10 @@ Two places produce a fractional edge:
 
 Screen-record the motion, extract every frame (`ffmpeg -fps_mode passthrough`), then scan rows for a **step** — a row brighter than the page below it by a margin while darker than the art above — not a **peak** (brighter than both neighbours). A peak scan misses this line entirely, which is how a verified fix came back three sessions later. Check the row spans the full width (encoder banding does not) and compare a dark-art control take.
 
+## The same knob, the other way: a fading element's shadow arrives late (Compose)
+
+A composable faded with `graphicsLayer { alpha = … }` uses `CompositingStrategy.Auto`, which renders into an **offscreen buffer the size of the layer** while alpha < 1. Anything drawn outside the layer's bounds, like its shadow, is clipped until alpha reaches 1 and the buffer is dropped, so the shadow "popped in a beat late" (user, 2026-09-19). Fix: `compositingStrategy = CompositingStrategy.ModulateAlpha` (alpha applied per draw, no buffer), plus drawing the shadow yourself (`drawBehind { softShadow(shape) }`) instead of `shadow()`/elevation, which draws in its own pass. Offscreen is right for clipping art (above); ModulateAlpha is right for fading something with a halo.
+
 ## Related
 
 - `gradient-scrim-mach-bands-and-8bit-residue.md` — the other way a scrim shows an edge on bright art (stops, not coverage).

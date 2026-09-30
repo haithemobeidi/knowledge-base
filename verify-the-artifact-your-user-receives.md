@@ -72,6 +72,10 @@ Measured contrast, same project, two releases apart: the previous release needed
 
 **Check every surface that carries the hash.** Badges multiply: a hero chip, a beta/testers page, a docs snippet. In the case this came from, the testers page silently lagged **two full releases** behind the homepage because only one of them was on the checklist. Grep for the *old* hash after updating; the correct post-condition is zero occurrences, not "I edited the file I remembered."
 
+## If you do hash the served bytes: guard against hashing the challenge page
+
+A release check fetched the served installer with plain curl, got Cloudflare's "Just a moment" challenge HTML, and **hashed that**. The mismatch looked like a corrupted upload. Before hashing a fetched artifact, assert the `Content-Type`, that the byte length equals the local file's, and the magic bytes (an MSI starts `D0 CF 11 E0`); on a mismatch print the first 200 bytes. Fetching with the updater's own user agent (`-A "tauri-plugin-updater/<version>"`) then passed four releases in a row for **byte integrity**. That's a different claim from "the updater can read it", which still needs the checks above.
+
 ## When this doesn't apply
 
 - **No human in the loop** (fully automated release). Then you do need the programmatic served-bytes check, and you need to solve the bot-challenge problem properly — an allowlist rule for your own verifier, or verifying from inside the origin rather than through the edge.

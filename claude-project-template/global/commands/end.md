@@ -100,6 +100,12 @@ This exists because copy-forward is the default editing action: every wrap re-re
 
 **Multi-track:** a stale line in another track's section is not yours to edit. Put it on the ledger tagged for that track.
 
+## Step 1f — KB sweep (name the lessons, or say none)
+
+Answer in the report, every wrap: **did this session produce a lesson that would still be true in a different app?** Look for a root cause that took more than one attempt, a platform or tool trap, a dead end worth warning about, or a technique the user approved. List each as `*kbdoc` + one line, or write `KB: none`. Each one not written this session becomes a `[ ]` ledger line titled `kbdoc: <one-liner>`, so it can't vanish with the chat. Also count the open `kbdoc:` ledger lines and name any older than 7 days; the user decides when they get written.
+
+This step exists because the rule lived only as prose ("flag it in chat"): 17 sessions in a row produced no tag and the KB went 9 days without a lesson (2026-09-21 → 09-30), while two flagged lessons sat unwritten on the ledger. A step with a written answer cannot be silently skipped.
+
 ## Step 2 — Reconcile the spine, then overwrite `docs/CURRENT_STATE.md`
 
 **First, the source of truth.** If this session completed or started a phase/block or changed scope, update the status spine in `ROADMAP.md` (and the matching section header). **Never renumber** — a cut item stays a labeled gap. **Spine cells stay at-a-glance short:** a status marker, the gate holding it open, at most a pointer. Do not append session narrative into a cell — that history lives in `HANDOFF_LOG.md`; when a session materially advances an item, REPLACE the cell's summary.
@@ -195,6 +201,7 @@ If a push was made, both must match; if they differ, the push didn't land — re
 2. What's next
 3. Anything to watch for next session (incl. the other track's files left in the tree, and any commits of theirs your push carried)
 4. Open ledger items: N (IDs that gate the next action; count vs soft max; stale items listed)
+5. KB: this session's `*kbdoc` lessons (or "none"), plus the open `kbdoc:` ledger count (Step 1f)
 
 ## After `/end` — the mini-wrap rule
 

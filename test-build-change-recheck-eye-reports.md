@@ -23,6 +23,20 @@ The ledger's discipline is "an item stays open until someone dispositions it", w
 2. When minting an eye-reported item, **name the build it was seen on** in the line ("seen on the debug build"), so the re-check can be found by grep later.
 3. A closed-as-not-reproducible item names the surface AND the build in its closing line, so a recurrence is a fresh line with both, not a reopen with neither.
 
+## Android: the build to measure on (2026-09-20)
+
+Compose on a debuggable build is not the app's real speed. Measured with `dumpsys gfxinfo` over twelve swipes on a Pixel Fold: the Memoir list had 42–54% of frames over 16 ms on debug and 14% on release code; the library wall 19% vs 3%. Two code changes made on debug measurements "changed nothing", because the debug build was the cost. The fix was a `perf` build type: release code under the debug key, so it installs in place over the debug build.
+
+```kotlin
+create("perf") {
+    initWith(getByName("release"))
+    signingConfig = signingConfigs.getByName("debug")
+    matchingFallbacks += "release"
+}
+```
+
+Costs: logs stripped by the release rules, minified crash traces (the mapping is under `build/outputs/mapping/perf/`), and about 2 minutes per install. A "grey until it loads" report that remained on perf was a different question entirely, network and cache-window (`LazyLayoutCacheWindow` ahead/behind, a bigger image memory cache), not frame time.
+
 ## Related
 
 - `instrument-before-patching.md` — measure before building the fix; this is its calendar-shaped cousin.

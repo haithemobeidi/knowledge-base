@@ -33,6 +33,10 @@ So a pathspec on `commit` acts as a second, silent `git add` over everything it 
 2. If you must use a pathspec (to commit a subset while other things are staged), list **exact files**, the same list you staged.
 3. **Before pushing, run `git show --stat HEAD`** (or `git log --stat origin/main..HEAD`) and read the file list. It's the only check that sees what actually went in.
 
+## The earlier half: staging is shared too
+
+The index is also shared by every session in the checkout. `git add` and `git rm` write it the moment they run, so a file staged early rides **whichever session commits next**. It happened three times between 2026-09-21 and 09-26, including a `git rm .npmrc` from one session landing in the other's wrap commit. The rule adopted: **nothing enters the index until the commit moment; stage the exact paths and commit in the same command.** To attribute a commit that swept in someone else's file without rewriting pushed history, add a `git notes` entry naming the real owner and push `refs/notes/commits` (other clones only see notes if they fetch `+refs/notes/*:refs/notes/*`).
+
 ## Related
 
 - [parallel-writers-minting-ids-collide.md](./parallel-writers-minting-ids-collide.md): the same one-checkout, two-sessions setting, colliding on ledger IDs instead of files.

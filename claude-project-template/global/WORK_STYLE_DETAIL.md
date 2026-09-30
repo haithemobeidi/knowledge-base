@@ -163,6 +163,10 @@ Hands-on testing and troubleshooting of the running app are delegated to the glo
 - **Connectivity is never toggled from the agent**: airplane mode over wireless adb killed the link once.
 - **A green run from the agent does not close a pause**; the user's verdict does.
 
+**Two more, from the 2026-09 release walks:**
+- **A FAIL is a claim about the input method before it's a claim about the app.** Four apparent FAILs in a desktop journeys walk (a Back button, keys in a dialog, edit-in-place, a delete) were synthetic `.click()`/`dispatchEvent` artefacts: they hit hidden-but-mounted screens or skipped focus and blur. All four re-passed with trusted CDP `Input.*` events. On Android, two FAILs were the brief's own wrong expectation. Re-run every FAIL with trusted input, or verify it against the data, before minting a bug.
+- **Visual verdicts need a reference.** An agent read white game art as "never loaded", and two agents disagreed on the same rows within an hour. Give it a known-good frame to compare against and have it judge art on a 3× crop.
+
 ## Audits
 
 Audit passes (file size, DRY, dead code, dependency drift, security) are valuable when they target measurable wins:
@@ -188,7 +192,7 @@ Unless the project file says otherwise, the user launches the app and dev server
 
 The flip side of prior art: pull knowledge in from OSS, push what we learn out so the next project does not re-learn it. The Knowledge Base is its own git repo, cloned under `~/Documents` on every machine (folder name varies per device — locate it via the path recorded in `~/.claude/CLAUDE.md` or `git remote -v`).
 
-**The rule:** when work produces a lesson that would still be true in a *different* app, say so in chat immediately: `*kbdoc` + a one-line summary. At `/end` the wrap only tags what is KB-viable; the article is written after `/end` when the user asks, in the KB repo (it never rides a project commit). Writing on the spot is fine when the user explicitly asks.
+**The rule:** when work produces a lesson that would still be true in a *different* app, say so in chat immediately: `*kbdoc` + a one-line summary. `/end` Step 1f makes the wrap answer it in writing (the lessons, or "none") and puts each unwritten one on the ledger as `kbdoc: …`; the article is written after `/end` when the user asks, in the KB repo (it never rides a project commit). Writing on the spot is fine when the user explicitly asks.
 
 **What qualifies** (all three): transferable beyond this app; non-obvious (cost real time, or the obvious approach was wrong); durable (a structural property, not a bug upstream fixes next week — a long-lived upstream gap qualifies, dated).
 
@@ -196,7 +200,7 @@ The flip side of prior art: pull knowledge in from OSS, push what we learn out s
 
 **Before writing: `git pull --ff-only` the KB, always.** Nothing in a project's session lifecycle pulls it; the local clone is stale by default and a stale clone does not look broken, it looks like a smaller KB. Then check for an existing article to **extend** rather than a new one to write — one file beats two half-files. Commit and push the KB in its own repo.
 
-Anti-patterns: dumping session narrative into the KB (articles are the lesson, not the diary); flagging `*kbdoc` on everything (if most sessions produce one, the bar is too low); writing while the fix is still unverified.
+Anti-patterns: dumping session narrative into the KB (articles are the lesson, not the diary); flagging `*kbdoc` on everything (if most sessions produce one, the bar is too low), and its mirror, going silent: 17 sessions with no tag is a missed sweep, not a quiet stretch; writing while the fix is still unverified.
 
 ## Memory scope
 

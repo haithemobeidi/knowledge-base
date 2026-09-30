@@ -209,6 +209,10 @@ app.post('/api/auth/exchange-code', async (c) => {
 
    **Fix**: host the sign-in flow on a surface that stays mounted — a Settings page, a dedicated dialog that doesn't dismiss on outside-click, or an app-level sign-in host exposed via a store/context. From a transient surface (e.g. a notification popover offering "Sign in to resume backup"), **route the user to the persistent surface** rather than running the flow inline. Generalizes beyond OAuth: any teardown-on-unmount subscription whose success depends on an out-of-band event landing later (loopback servers, WebSocket handlers, `postMessage` listeners, deep-link handlers) must not live in a surface that unmounts as part of normal interaction. (Playmoir, 2026-07-21: the notification hub's expired-session "Sign in" routes to Settings/Connections for exactly this reason — the hub panel is a Radix Popover that unmounts on close.)
 
+## Is the loopback socket hijackable? (Windows, researched 2026-09-21)
+
+RFC 8252 App. B.3 says a Windows app receiving the auth response on loopback SHOULD set `SO_EXCLUSIVEADDRUSE`. `tauri-plugin-oauth` 2.0.0 doesn't, and doesn't need to: it binds `127.0.0.1` with a plain `TcpListener::bind` and never sets `SO_REUSEADDR`, and since Windows 7 ("enhanced socket security") a second bind to that exact address and port fails unless the *first* socket opted into sharing, same user or not. The hijack the RFC warns about was load-bearing on XP and earlier. What remains is pre-squatting a port before you bind, which the option can't address; binding port 0 (the kernel picks) avoids it, but providers that require an exact redirect (as in this article's fixed port) keep it. RFC 8252 §8.1 names PKCE as the real mitigation.
+
 ## Reference Implementation Layout
 
 This pattern was first proven in a Tauri 2 + Cloudflare Worker + better-auth desktop app. The file layout you'd recreate in any project of that shape:

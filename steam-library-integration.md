@@ -1,7 +1,7 @@
 ---
 stack: [steam, rust, vdf, game-library-integration, cdn]
 kind: reference
-last_verified: 2026-09-06
+last_verified: 2026-09-29
 ---
 
 # Steam library integration — cover art, install-state, and the ToS constraint that shapes the whole architecture
@@ -87,6 +87,27 @@ Two more measured facts in the same family (2026-08-14, appids 3768760 / 1004640
 - The harvest decays as the library grows — new purchases have no hash until the harvesting machine re-runs. Make the desktop client maintain the column as part of its normal library sync, not a hand-run script.
 
 The epistemics of how this was almost missed — a unanimous two-source census concluding "no logo exists" for logos the desktop was visibly rendering — is written up in [[negative-control-before-trusting-a-probe]] (believed negatives need a positive control). The mechanics live here; don't duplicate the story there.
+
+## 7. `LastPlayed` is a last-TOUCHED stamp: an install moves it (measured 2026-09-28)
+
+Starting an install of The Witcher 3 set `localconfig.vdf`'s `LastPlayed` for 292030 to the install start (22:15:14), while `Playtime` stayed at 16316 and the autocloud `lastlaunch` stayed in June. Playmoir had trusted `LastPlayed` since 1.7.1, so the game jumped to Home's "Continue" and the stamp synced to the cloud, where forward-only sync made it permanent. The user: "why did the witcher pop up as my continue game? i haven't logged it or opened it, all i did was start the install".
+
+**Rule:** believe a newer `LastPlayed` only when `Playtime` rose with it, which a real play does and an install, update or verify does not. Remember what you last believed (a small baseline file shared by every reader), and take the first sighting as is. Trade-off, ruled by the user: a sub-minute launch no longer counts as playing. Generally, a vendor's "last used" timestamp needs a second signal that only real use moves.
+
+## 8. F12 screenshots: where Steam puts them, and how to notice a new one (2026-09-29)
+
+- Path: `{SteamPath}/userdata/{SteamID3}/760/remote/{appid}/screenshots/`. `userdata` is indexed by the **SteamID3** (the raw `ActiveUser` registry DWORD, the account id), **not** the SteamID64. `SteamPath` and `ActiveUser` come from the registry.
+- Only top-level `.jpg` files are shots; Steam keeps a `thumbnails/` subfolder beside them.
+- Detection that held up: poll the running game's folder on an existing ~3 s tick, **baseline at game start** (lazily, on the first successful listing, if Steam was signed out at start), and skip any file younger than ~500 ms or empty (it may still be mid-write).
+- **Copy each new shot into your own folder at once.** A webview's asset scope won't reach into Steam's `userdata`, and the player may delete the shot in Steam before acting on your prompt.
+- If your own app ever presses F12 for the player, remember those names and skip them once, or you'll prompt about your own shot.
+- Unverified: whether a custom screenshot folder (Steam → Settings → In-Game) changes this path.
+
+## 9. Steam Web API answers that look like bugs (2026-09-26)
+
+- **`rtime_last_played` is only returned to the API key's owner.** The owner's own library came back with it on 329 of 403 games, and a friend's with 0 of 56, so "never played" for everyone else was Steam, not the code. Don't build a feature for other users on it; use the local `localconfig.vdf` value (with the rule in §7) instead.
+- **`GetPlayerAchievements` returns `403 {"error":"Profile is not public"}`** for a private profile, while the owned-games call still returns the library. Treat it as a user-explainable state ("your Steam profile is private"), never a silent failure (see [[silent-refusals-make-clean-logs-meaningless]]).
+- For unlocks there's a faster, keyless source than the API: [[steam-unlocks-from-local-stats-file]].
 
 ## Related, adjacent domain (save-file locations, not cover art)
 
