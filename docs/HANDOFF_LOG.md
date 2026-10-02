@@ -46,3 +46,15 @@ Format and rationale: `claude-project-template/project/docs/HANDOFF_LOG.md`. Sam
 
 **Confirm:** Restate that the three v2-mentioning strings exist and where, before writing the generic version — otherwise the generic path lands alongside the hardcoded one instead of replacing it.
 
+
+## 2026-10-02 02:10 | Two lessons + ledger-archive fix (from BuddySystem)
+
+**Status:** green — fixed `ledger-archive.py` dry-run against BuddySystem's fresh v2 ledger reports nothing to move (before the fix it listed the header comment's example lines L-1, L-2 as closed items). `kb-browser.html` regenerated.
+
+**Changed:** New lessons `wireless-adb-refused-means-unpaired.md` and `on-device-llm-refuses-profane-input.md`, each with a README one-liner. `ledger-archive.py` now skips chunks inside HTML comment blocks, the same way `session-start-context.py` already did (additive only). BuddySystem added to the rollout table. Hosted KB browser not republished.
+
+**Next:** Projects pick up the script fix with `check-template-drift.py --sync`. BuddySystem is the one that hit it.
+
+**If it fails:** If a ledger ever puts real items inside a comment on purpose, they'll now never move. That's the intended trade: never archive what the start hook doesn't count.
+
+**Confirm:** The fix only adds a comment-state check before the `[x]/[-]` match; nothing else in the script changed.

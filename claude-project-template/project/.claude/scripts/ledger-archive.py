@@ -89,8 +89,19 @@ def main() -> None:
 
     keep: list[str] = []
     move: list[str] = []
+    in_comment = False
     for chunk in chunks:
-        if not re.match(r"- \[[x-]\]", chunk):
+        # The header's example items live inside an HTML comment, and they look
+        # exactly like real closed lines. Moving them would cut lines out of the
+        # comment and archive fiction; seen on a fresh v2 ledger, 2026-10-02.
+        # The start hook already skips comment blocks; this keeps the two agreeing.
+        started_in_comment = in_comment
+        opened, closed = chunk.rfind("<!--"), chunk.rfind("-->")
+        if opened > closed:
+            in_comment = True
+        elif closed > opened:
+            in_comment = False
+        if started_in_comment or not re.match(r"- \[[x-]\]", chunk):
             keep.append(chunk)
             continue
         dates = [d for d in re.findall(r"(\d{4}-\d{2}-\d{2})", chunk)]

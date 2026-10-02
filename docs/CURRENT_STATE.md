@@ -31,6 +31,7 @@ The template is the KB's real deliverable. This table is what "where do we stand
 | Project | Protocol | Synced to template | Notes |
 |---|---|---|---|
 | `claude-project-template` | **v2** (`70dc989`) | — | canonical |
+| BuddySystem | **v2** (bootstrapped 2026-10-02) | yes, plus the ledger-archive fix below | 3 tracks (coping C, impulse I, rephrase R) |
 | Playmoir / Checkpoint | v1 | behind | 3 tracks, 89 open ledger items, 95KB CURRENT_STATE — the migration case |
 | everything else | v1 | unknown | not surveyed |
 
