@@ -1,7 +1,7 @@
 ---
 stack: [steam, rust, desktop, local-first]
 kind: pattern
-last_verified: 2026-09-29
+last_verified: 2026-09-30
 ---
 
 # Detect Steam achievement unlocks from Steam's own local file, ~8 s after they happen, with no API key, login or Steamworks
@@ -49,9 +49,15 @@ Prior art reads the same file: SamRewritten (Rust), rewind (polls every 3 s), PS
 
 On a live unlock (2026-09-29) the local watch fired at once, but the user-facing nudge waited for the *server* to pull the unlock from the Steam Web API, which hadn't listed it yet, so a 60 s poll caught it a minute later. It also didn't work signed out at all, and every user's polling drew on one shared API key's daily quota.
 
-## The plan that builds on it (D-85, not yet verified)
+## The unlock is the `data` bit, not the timestamp (D-85, 2026-09-30)
 
-The server's unlock row ids are **UUIDv5 of `ach:{steamId64}:{appid}:{apiname}`**, and `SteamID64 = 76561197960265728 + accountid`, which the desktop knows from the registry without a session. So the client can **mint the identical rows locally** the moment Steam writes the file, and the server's copies land *on* them instead of duplicating. The named risk: a local row the user has already linked to a journal entry must not be clobbered by the server's newer copy (a local-only column protects the link). Update this section when it's built.
+A times-only reader misses trophies. Steam can set an achievement's bit in the group's `data` bitfield **one write before** its `AchievementTimes` entry appears: seen live in Assassin's Creed Black Flag Resynced, bit 2/6 set at 19:33:06 with no time yet, and the times-only watcher missed it. Treat the **set bit as the unlock**, with the time optional (filled when a later write brings it).
+
+The catch: every stat group carries `data`, and for INT stats `data` is the stat's *value*, not a bitmask. So a timeless set bit counts only where the **schema names that coordinate** (`<group>/<bit>` exists under `bits` in `UserGameStatsSchema_<appid>.bin`). Shipped in desktop 1.8.0 (`steam_stats_watch.rs`).
+
+## The plan that builds on it (D-85, shipped in 1.8.0)
+
+The server's unlock row ids are **UUIDv5 of `ach:{steamId64}:{appid}:{apiname}`**, and `SteamID64 = 76561197960265728 + accountid`, which the desktop knows from the registry without a session. So the client can **mint the identical rows locally** the moment Steam writes the file, and the server's copies land *on* them instead of duplicating. The named risk: a local row the user has already linked to a journal entry must not be clobbered by the server's newer copy (a local-only column protects the link). Built and shipped in desktop 1.8.0 (2026-10-01): the server and the desktop now both mint `achievement_unlocks` with identical ids.
 
 ## Related
 

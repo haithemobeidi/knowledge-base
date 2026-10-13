@@ -59,6 +59,14 @@ Do **not** copy the lesson files, `DECISIONS.md`, `references.md`, or this READM
 
 ## Lessons
 
+- [tauri-window-build-from-event-handler-deadlocks.md](./tauri-window-build-from-event-handler-deadlocks.md) — Tauri 2 on Windows: `WebviewWindowBuilder::build()` from a global-shortcut or event handler hangs the main thread (Tauri documents it); build windows from an async command or a spawned thread.
+- [keydown-layering-needs-capture-phase.md](./keydown-layering-needs-capture-phase.md) — `stopPropagation` can't stop a second listener at the same step, so two `window` keydown handlers both ran and one Escape closed two layers; the overlay listens in the capture phase and stops it there.
+- [js-replace-string-dollar-patterns.md](./js-replace-string-dollar-patterns.md) — A JS `replace` replacement STRING reads `$$`, `$&`, `$'` as patterns, so a codemod pasting `$$(` writes `$(`; use a function replacer or split/join.
+- [replay-an-entrance-animation-as-a-loop.md](./replay-an-entrance-animation-as-a-loop.md) — Replaying an entrance by re-mounting blinks (it starts from nothing); a replay is its own loop from rest to rest via the Web Animations API.
+- [overflow-x-clip-not-hidden-for-sticky.md](./overflow-x-clip-not-hidden-for-sticky.md) — One wide element zooms a phone page out; `overflow-x: clip` on html and body stops it, `hidden` on both breaks every `position: sticky`.
+- [swiftui-layout-and-animation-traps.md](./swiftui-layout-and-animation-traps.md) — SwiftUI shared-element flights: self-measuring views loop, a view inserted in the animating transaction appears finished, and a `scaledToFill` image sizes its parent (art goes in an overlay on a fixed frame).
+- [verify-motion-frame-by-frame.md](./verify-motion-frame-by-frame.md) — Real-time glances and 1 s samples miss motion bugs: on the web pause the Animation objects and set currentTime; on iOS record the simulator, slow the app's motion, and contact-sheet the frames at 30 fps.
+- [xcode-27-cli-device-and-test-setup.md](./xcode-27-cli-device-and-test-setup.md) — Xcode 27 from the CLI: DeviceHub instead of Simulator.app, wireless iPad pairing, the Swift 6 settings that work, and four XCUITest traps (nonisolated test target, stored XCUIApplication, "Close" not "Cancel", defaults that outlive a reset).
 - [tauri-desktop-oauth.md](./tauri-desktop-oauth.md) — Google OAuth in Tauri 2 desktop apps (localhost callback + bearer tokens). The flow, code, gotchas, what NOT to do.
 - [tauri-ipc-serde.md](./tauri-ipc-serde.md) — Always add `#[serde(rename_all = "camelCase")]` to Rust structs crossing the Tauri IPC boundary. Hidden `undefined`-field bug.
 - [tauri-sqlite-direct-sqlx.md](./tauri-sqlite-direct-sqlx.md) — Opening your own sqlx pool alongside `tauri-plugin-sql`. Plus the migration-not-registered footgun that shipped a silent feature regression.

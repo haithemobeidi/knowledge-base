@@ -1,7 +1,7 @@
 ---
 stack: [llm, prompt-engineering, ai-features, gemini]
 kind: gotcha
-last_verified: 2026-08-12
+last_verified: 2026-10-02
 ---
 
 # An LLM summarizer with world knowledge silently "corrects" user content back to canonical facts
@@ -74,6 +74,12 @@ engine: **the user's version is the authoritative replica, and everything derive
 it must be invalidated by edits and forbidden from writing canon back over it.**
 Models are helpful by default, and helpfulness includes correcting you; products built
 on memory and journaling are exactly where correction is data loss.
+
+## A cousin: write-back must be told which fields the person touched (2026-10-02)
+
+When the model writes its extraction back into fields the user can edit (Region, Sub-location, Milestone, filled from the session notes), "correct whatever the note contradicts" is not enough information. The model can't tell the user's own deliberate edit from a stale value it filled earlier, and an empty field can't say "cleared on purpose" versus "never filled". Both mistakes overwrite the person.
+
+The fix is data, not prompting: track which fields the person touched (a hand edit, a deliberate clear) and pass that list to the re-mint as fields it **must not write** (Playmoir desktop 1.8.0: `keepFields` in `packages/frontend/src/features/journal/autoSummarize.ts`; the Android/iOS half is M-107). A hand edit is final; the model only fills what the person never touched.
 
 ## Related
 
