@@ -180,6 +180,11 @@ Scope: production code only by default; prototypes and mocks are throwaway itera
 
 **500 lines is the target, not the soft edge of an 800 zone.** Splits extract a coherent concept; shaving lines to duck under a cap is not a split.
 
+**The cadence: a small audit at every pause, a fuller one at every feature close.** (User, 2026-10-13, starting a native iOS build: "audits at the end of every pause maybe to see if we duplicated work from the previous Pause and make sure we're not making monolithic files over 500 lines unless absolutely needed... audit at the end of every full phase/feature maybe to see if we can split files (not arbitrarily but if there's a benefit)... adds some extra work but reduces tech debt later".)
+- **Per pause, before the hand-off** (minutes, not a sitting): read the pause's diff against what the earlier pauses of the same feature built. Did this pause write a second copy of a helper, a style, a layout or a data shape that already exists? Did a file cross 500 lines? Fix what is cheap inside the pause; ledger the rest with the concept named. Report it in one line in the pause block ("Audit: no duplication; largest file 412 lines").
+- **Per feature, at close:** the protocol's "Feature close" read (reuse, duplication, extraction), with splits and dedupes ledgered and done at a quiet point.
+- **The win is named either way:** a second copy removed, a concept given its own file. Neither audit is a licence to reshuffle; the anti-patterns above still hold.
+
 ## Visible issues
 
 The user sees crashes, errors, and visual bugs themselves and reports them. Do not proactively dig for what they can see. Proactive investigation is for what they cannot see: sync state, missing rows, silent failures. Likewise, **the user verifies visuals** — do not browser-check mocks or renders yourself; run the syntactic gates, then hand off for their eyes.
