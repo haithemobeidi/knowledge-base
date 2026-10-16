@@ -75,3 +75,4 @@ Hold the window **handle** in the watcher, not the label — any dismiss path (b
 
 - [tauri-multiwindow-dev-hmr-stranding.md](./tauri-multiwindow-dev-hmr-stranding.md) — the sibling failure class for the same window shape (dev reloads wedging an always-on-top webview whose dismiss paths are all JS-side).
 - [instrument-before-patching.md](./instrument-before-patching.md) — the click-ring/hit-test tripwire that turns "clicks vanish" reports into named DOM/window facts.
+- [screen-capture-overlay-starves-under-borderless-game.md](./screen-capture-overlay-starves-under-borderless-game.md) — the capture half of the same family: a borderless game scanned out from its own swap chain is on screen but absent from the desktop image a capture overlay reads, so the overlay starves at 15 to 19 fps (and in HDR10 with Windows HDR off, sees washed colour) until Windows HDR is on or the game runs Windowed.
