@@ -55,7 +55,7 @@ The upstream issue blamed hardware-accelerated GPU scheduling and GPU contention
 
 Not measured: a borderless **SDR** game with Windows HDR off. The runs that starved all had the game in HDR10, so this lesson cannot say whether the plane alone or the HDR10 output on the plane is what Windows HDR on removes. The remaining system-wide lever, turning multi-plane overlay off (`HKLM\SOFTWARE\Microsoft\Windows\Dwm`, DWORD `OverlayTestMode` = 5, restart, reversible by deleting it), was never needed. It is a Windows-level change: offer it as the user's decision with the trade-off stated, never as a first move.
 
-A caution on the full-rate case: once the overlay captures at 140 to 150 fps it costs real GPU time, and with its worker on realtime GPU priority it wins that time from the game. The user reported the game choppy in exactly that run. Cap the overlay (its own frame limit) or drop the priority before blaming the game.
+A second effect, measured with PresentMon (Intel's frame-time recorder) once the capture problem was solved: with the game **windowed** under the overlay and Windows HDR on, the game itself presented in bursts of about five frames at 60 fps separated by stalls of 0.1 to 1.9 s (87 stalls, 49 of 60 seconds), each stall CPU-side inside the game (the frame's CPU time was the whole gap, GPU busy a normal 5 to 8 ms, no wait in Present), while the same game with the overlay closed presented 60 a second with a 19.5 ms p99. The overlay's presenter sat in a hardware plane ("Hardware Composed: Independent Flip") above the composed game window, running a steady 66 a second, which is also the number a frame counter shows: the overlay's cadence, not the game breaking its cap. Consistent with the game throttling itself because the compositor reports its window covered; not GPU contention (overlay GPU busy 4.5 ms a frame, game 6 ms, with the GPU mostly idle). The same game borderless had fed the overlay 135 to 150 fresh frames a second earlier that day, so the stall belongs to the composed-window case; the borderless capture is the next measurement. When a game gets choppy under a capture overlay, record the game's own presents before touching GPU priority or caps: a CPU-side gap with an idle GPU is an engine deciding not to run.
 
 ## Pixel checks that separated capture from effect
 
@@ -77,6 +77,7 @@ The project's issue on exactly this symptom (overlay at 1.5 fps with a game runn
 - A game frame cap and a GPU priority change leave the overlay's rate where it was.
 - Window capture is slower than display capture, not faster.
 - The untouched half of the comparison looks as wrong as the processed half.
+- The game's own presents come in short bursts with CPU-side gaps while the overlay covers it, GPU idle: an occlusion throttle, not load.
 
 ## Related
 
