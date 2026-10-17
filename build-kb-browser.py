@@ -53,7 +53,7 @@ TAG_GROUPS = {
     "multiwindow": "Platforms & Runtimes", "threads": "Platforms & Runtimes",
     "chrome-extension": "Platforms & Runtimes", "manifest-v3": "Platforms & Runtimes",
     "web": "Platforms & Runtimes", "adb": "Platforms & Runtimes", "comfyui": "Platforms & Runtimes",
-    "powershell": "Platforms & Runtimes",
+    "powershell": "Platforms & Runtimes", "unity": "Platforms & Runtimes", "il2cpp": "Platforms & Runtimes",
     # Cloud & backend
     "cloudflare-worker": "Cloud & Backend", "cloudflare-r2": "Cloud & Backend", "cloudflare": "Cloud & Backend",
     "d1": "Cloud & Backend", "wrangler": "Cloud & Backend", "s3": "Cloud & Backend",

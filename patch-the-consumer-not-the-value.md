@@ -97,3 +97,5 @@ Cheapest possible disambiguation: get a description of what it actually looks li
 ## When it's overkill
 
 If you can rebuild the artifact, change the config, or the value genuinely does originate in the binary (a hardcoded limit with no external source) — just do the direct thing. This playbook earns its cost when: the artifact is opaque and un-rebuildable, the value demonstrably comes from outside it, or the patch has to survive updates and be handed to other people. A one-off local hack you'll redo in five minutes doesn't need signature-scanning.
+
+**See also:** [unity-il2cpp-aspect-lock-is-game-code.md](./unity-il2cpp-aspect-lock-is-game-code.md), the same playbook applied to a Unity IL2CPP game, where the dumped metadata replaces a `.pdb`.
