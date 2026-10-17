@@ -27,6 +27,15 @@ To find which one, xref the **game assembly's** callers of `Camera.set_rect`, `S
 
 Either layer alone looks like a failure. Unlocking the menu gives you an entry that still applies 16:9, and fixing the apply step changes nothing while the entry is greyed out. When an unlock "does nothing", look for a second consumer.
 
+## Then the UI breaks: width-matched CanvasScalers
+
+Native resolution exposed a third problem the 16:9 lock had been hiding. The UI canvases were 3840x2160 `ScaleWithScreenSize` scalers with `matchWidthOrHeight = 0`, which matches **width**. At 3440x1440 that gives a scale of 0.90 instead of 0.67, so the UI is about 34% too tall: cards spilled out of their panels and covered headers. Check this before shipping any Unity ultrawide fix.
+
+- **Reading scaler settings from the assets:** with UnityPy, take every `MonoBehaviour`'s `get_raw_data()` and search for the scaler's fixed tail, `0000c042 0000c042 0000803f` (fallback DPI 96, sprite DPI 96, dynamic PPU 1). Walking back 32 bytes gives mode, reference PPU, scale factor, reference resolution, match mode and match. No typetree is needed, and all 3,049 files took a few minutes. The 1920x1280 ones turned out to be nested canvases, where a scaler does nothing; the 3840x2160 ones were the roots that matter.
+- **The fix belongs in Unity's own `CanvasScaler.HandleScaleWithScreenSize`,** not in 1,000 assets. Right after the screen size is read (here `xmm8` = width, `xmm7` = height), clamp `width = min(width, height * 16/9)`. The UI sizes as on a 16:9 screen of the same height and gets the extra width. 16:9 and narrower screens get bit-identical values, since `1080 * 1.7777778f` is just above 1920. It's a 6-byte `jmp` + `nop` hook over two instructions (`mov ecx,[rbx+0x34]; xorps xmm6,xmm6`), which the cave replays before jumping back.
+- **Cave space was scarce:** the game-code `il2cpp` section's longest int3 run was 17 bytes. The runtime's `.text` had one 30-byte run after a `ret`. Building the constant in a register (`mov eax, 0x3FE38E39; movd xmm0, eax`) instead of loading it from memory brought the cave down to 29 bytes. Check that the scratch register is dead at the hook; here `eax` was overwritten by the next call.
+- **Unavoidable side effect:** elements anchored to the screen edges move outward (cards drifted away from their centre-anchored headers). Unity always stretches screen-space canvases across the whole screen, so a "16:9 box" can't be done from the scaler. Readable and correctly sized is the realistic target; ask the user whether the drift bothers them.
+
 ## Toolchain and its traps
 
 - **Il2CppDumper:** `Il2CppDumper.exe GameAssembly.dll <Game>_Data/il2cpp_data/Metadata/global-metadata.dat <outdir>`. Run it from **PowerShell with Windows paths**, and set `"RequireAnyKey": false` in its `config.json`. Launched from Git Bash with `/f/...` paths, it silently fell back to a **GUI file-open dialog** on the user's desktop, which they noticed and asked about, and it wrote nothing.
@@ -44,6 +53,8 @@ Follow the rules in [patch-the-consumer-not-the-value.md](./patch-the-consumer-n
 
 - **When identical sites are legitimate, check their spacing.** The table load appears twice (width read, height read). The script requires exactly 2 matches, **0x4B bytes apart**, so a future build with a third look-alike makes it refuse instead of writing to it.
 - **The `.bat`-with-embedded-PowerShell launcher breaks on an apostrophe in its own path.** `-Command "...Get-Content -LiteralPath '%~f0'..."`: the game folder "Castlevania Belmont's Curse" closes the quote, and you get "The string is missing the terminator". Pass the path through an environment variable instead (`set "SELF=%~f0"` → `$env:SELF`). The earlier WITN/LORWIN/Vahrin's Call scripts have the same latent bug; their folders just happen not to contain `'`.
+- **PowerShell aliases beat functions.** A helper named `Cat` made every call run `Get-Content` (alias `cat`), which failed with "Cannot convert 'System.Object[]' to … 'Path'". Before naming a helper, check `Get-Alias <name>`; `cat`, `gc`, `sort`, `diff`, `kill`, `ls`, `type` and `select` are all taken.
+- **Detect independent parts independently.** Once the patcher gained a second part, a DLL patched by the first release was neither stock nor fully patched. Give each part its own stock / patched / unknown state, apply only what's missing, and refuse only on unknown. Test the whole matrix on scratch copies: stock → apply, re-run, undo with a backup, old release → upgrade, undo without a backup, one flipped byte → refuse. The script's running-game check will block tests while the user is playing, so run the test copy with that one guard renamed.
 - For a public repo, add `*.bat text eol=crlf` to `.gitattributes`, find the game through `HKCU\Software\Valve\Steam` → `libraryfolders.vdf` rather than a hardcoded drive, and don't commit any game binaries (`*.dll` in `.gitignore`).
 
 ## When it's overkill
