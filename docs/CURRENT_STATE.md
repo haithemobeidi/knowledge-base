@@ -1,6 +1,6 @@
 # Knowledge Base — Current State
 
-_Last updated: 2026-09-21 02:05_
+_Last updated: 2026-10-20 01:09_
 
 > **Deliberately minimal.** This repo is a reference library and the home of the
 > project template, not an app — so it carries two documents and no machinery:
@@ -20,9 +20,7 @@ _Last updated: 2026-09-21 02:05_
 
 ## 📍 NEXT ACTION
 
-Build the version-agnostic upgrade path (see Open loops): a global `/upgrade` command beside `/start` and `/end`, and a start-hook message that compares `protocol_version` against `CURRENT_PROTOCOL_VERSION` instead of naming v2. Do it before v3 exists, not after.
-
-Separately and **not this repo's job**: migrating Playmoir/Checkpoint to v2 happens in a Checkpoint session with the agent that has that project's context — `MIGRATION.md` §6b, and the 62-bullet triage belongs there. Dry run done 2026-09-21: **167,474 → 31,004 chars, ~41,000 → ~7,751 tokens**; CURRENT_STATE 95,107 → 8,939; conservation checked (90,453 out, 91,698 in). It lands at 124% of the 25,000 budget, and the cause is the ledger's 87 open items, not the document shapes — shrink the contributor, not the budget.
+Nothing is owed in this repo. The next build here waits on the user's four harness-plugin decisions (Open loops, first item); until they answer, the standing item is the version-agnostic upgrade path (second item). Other projects pick up the 2026-10-20 template in their own sessions with `check-template-drift.py --sync` — never from here.
 
 ## Template rollout
 
@@ -30,48 +28,60 @@ The template is the KB's real deliverable. This table is what "where do we stand
 
 | Project | Protocol | Synced to template | Notes |
 |---|---|---|---|
-| `claude-project-template` | **v2**, hook delivers in parts since 2026-10-20 | — | canonical |
-| BuddySystem | **v2** (bootstrapped 2026-10-02) | behind — needs the 2026-10-20 resync (`check-template-drift.py --sync`) | 3 tracks (coping C, impulse I, rephrase R) |
-| Playmoir / Checkpoint | **v2** (migrated 2026-09-22) | resync to the parts hook in progress 2026-10-20, by its own session | 5 tracks (D, M, I, S, SO), 94 open ledger items, 20KB CURRENT_STATE — still ~210% of budget |
+| `claude-project-template` | **v2**, hook delivers in parts since 2026-10-20 (`b956737`) | — | canonical |
+| Playmoir / Checkpoint | **v2** (migrated 2026-09-22) | **yes** — resynced 2026-10-20 (`b18cefb0`), 6 parts, all under 9,000 | 5 tracks (D, M, I, S, SO), 94 open ledger items, 20KB CURRENT_STATE — ~200% of budget; its SO-5 cleanup |
+| BuddySystem | **v2** (bootstrapped 2026-10-02) | behind — needs the 2026-10-20 resync | 3 tracks (coping C, impulse I, rephrase R); until resynced its start context is a 2,000-char preview if over 10K |
 | Nuveen-Reporting | v1 | behind | single track |
 | Tagsmith, armada-odin3 | protocol.json without a version (v1) | behind | not surveyed further |
 | TrainerKit, CLI-LLM-Hub, D4-Optimizer, MPV-Cinema, namesmith | pre-layering (own root PROTOCOL.md) | never installed | migration per `MIGRATION.md` §1–6 |
 
-**Machines:** global layer installed on this Windows desktop. The ARM laptop and
-the Linux laptop have not pulled since `70dc989` — they need `git pull` **and**
-`install-global.py` (the `@import`s are live, the command and agent copies are not).
+**Machines:** global layer installed and current on this Windows desktop
+(`install-global.py` rerun 2026-10-20). The ARM laptop has never run
+`install-global.py` (Checkpoint ledger D-1, open since 2026-09-09); the Linux
+laptop's state is unknown. Both need `git pull` **and** `install-global.py`.
 
 ## Protocol v2 — what is built
 
-Built and committed in `70dc989`: the payload budget and its guard, the ledger
-manifest, the struck-ID guard, the three v2 document shapes, the I-PASS handoff
-format, the ACCEPT step, and two v1 bug fixes. Reasoning and sources are in
-`claude-project-template/DESIGN.md`.
+Built and committed in `70dc989` (2026-09-21): the payload budget and its guard, the
+ledger manifest, the struck-ID guard, the three v2 document shapes, the I-PASS
+handoff format, the ACCEPT step. Reasoning and sources are in
+`claude-project-template/DESIGN.md`. **v2 is inert until a project opts in**
+(`protocol_version` defaults to 1).
 
-**v2 is inert until a project opts in.** `protocol_version` defaults to 1, so a
-project that syncs the scripts behaves exactly as it did before.
-
-Everything `DESIGN.md` specifies is now built. `migrate-docs-v2.py` is written
-and dry-run against Playmoir; `ledger-archive.py` does the recurring closed-line
-move; `end-derive.py` supplies the wrap's facts from git. The drift check now
-fetches the KB clone before comparing against it, and the start hook warns when
-this machine's clone has gone quiet — that gap would have bitten on the first
-attempt to sync the laptop.
+**Delivery in parts (2026-10-20, `b956737`).** Claude Code caps one hook string at
+10,000 characters and swaps anything longer for a 2,000-character preview plus a
+file path it never asks the model to read — so for a month every Checkpoint
+session start received the preview, not the payload. The start hook now packs
+the payload into labelled parts under `payload.part_chars` (9,000); `settings.json`
+wires it 8× (`--part 1..8`) plus a `compact` entry (`--slim`). Part 1 builds,
+prints the payload size and caches per session; the rest wait for the cache and
+emit their slice. With it: manifest lines render `ID →tag (date) TITLE`; gating is
+per NEXT ACTION section with capped expansions; `check-payload-budget.py` reports
+delivery and fails on UNDELIVERABLE; the index hook skips binaries; a track may
+declare its own `check_command`. `PROTOCOL.md` #9, `DESIGN.md` "Found after
+shipping", `MIGRATION.md` §6c record it; lesson
+`hook-output-string-cap-measure-what-arrives.md`.
 
 ## Open loops
 
-- Playmoir migration not yet applied (its own session, with the Checkpoint agent)
-- **A version-agnostic upgrade path** (user, 2026-09-21). v2 will not be the last
-  shape, and the v1-vs-v2 notice shipped in `66d8b6c` hardcodes "v2" in the hook,
-  `PROTOCOL.md` and the README — all three need rewriting at v3. The seed is in
-  place: `protocol_config.CURRENT_PROTOCOL_VERSION` and the `UPGRADE_SCRIPTS`
-  map (target version → the script that migrates into it, one hop each), both
-  currently unused. What is NOT built, deliberately: a global `/upgrade` command
-  alongside `/start` and `/end` (installed by `install-global.py`, so the user
-  types one word in any project), a generic start-hook message that names the
-  two version numbers instead of mentioning v2, and multi-hop dispatch for a
-  project two shapes behind. Do this before v3, not after.
-- The three owed lessons are written: `shared-budget-caps-relocate-mass.md`
-  (which absorbed catalog-plus-fetch as its fix section rather than splitting one
-  idea across two files) and `handoff-for-a-reader-with-no-memory.md`, plus the
-  prune-then-dangle extension inside `parallel-writers-minting-ids-collide.md`.
+- **Harness repo as a plugin for the buddy** (user asked "can we do that", 2026-10-20;
+  plan given, four decisions unanswered): private or public · scripts in the plugin
+  vs copied per repo · buddy on `main` under track rules vs his own branch with a
+  light mode · keep the Checkpoint-grown defaults or strip to the core. Separate
+  repo, not in the KB. Unverified before building: whether plugin skills answer to
+  plain `/start` or need a `harness:` prefix, and whether Claude Code prompts a
+  collaborator to install a project-enabled plugin. Do not start unasked.
+- **A version-agnostic upgrade path** (user, 2026-09-21). The v1-vs-v2 notice
+  hardcodes "v2" in the hook, `PROTOCOL.md` and the README. Seed in place:
+  `protocol_config.CURRENT_PROTOCOL_VERSION` + `UPGRADE_SCRIPTS`, both unused.
+  Not built: a global `/upgrade` command, a generic start-hook message naming the
+  two version numbers, multi-hop dispatch. Do this before v3, not after.
+- **Resync the other protocol projects** to the 2026-10-20 template, each in its
+  own session: BuddySystem first (v2, 3 tracks), then Nuveen, Tagsmith,
+  armada-odin3. Procedure: `MIGRATION.md` §6c.
+- **Two untracked files at the KB root await the user's call** (never delete):
+  `react19.md` (2026-09-09; drop it + one pointer in `references.md`, or turn it
+  into a verified checklist) and `do_for_checkpoint.md` (2026-09-21; the v2
+  migration brief, obsolete since 2026-09-22).
+- `PROTOCOL.md` is at 202 lines against its own "~200 lines" rule; trim a paragraph
+  the next time it is touched.
