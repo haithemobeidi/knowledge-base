@@ -95,6 +95,25 @@ Then, by hand: apply the rulings, fill CURRENT_STATE's new **Shipped** section (
 
 Finally: `python .claude/scripts/check-payload-budget.py`. Over budget after migrating usually means the ledger's open count, not the documents — shrink the contributor, never the budget.
 
+## 6c — Delivery in parts (template 2026-10-20)
+
+For any project already on the template, v1 or v2. Claude Code caps one hook string at 10,000 characters, so a settings.json that wires the start hook once delivers a 2,000-character preview of anything larger. The fix is in the template-managed files; nothing in the documents changes.
+
+```bash
+python .claude/scripts/check-template-drift.py          # expect settings.json + the scripts to differ
+python .claude/scripts/check-template-drift.py --sync   # after the user agrees
+python .claude/scripts/check-payload-budget.py          # now prints a Delivery block: parts, entries wired, ceiling
+```
+
+Then in `.claude/protocol.json` (project-owned, not synced):
+
+- `payload.max_gating_items` is now **per NEXT ACTION section**. A five-track project at the old value of 5 expands up to 25 items; 3 is a sane start there. `payload.gating_item_max_chars` (1,200) caps each expansion.
+- v2 projects may delete `ledger.item_max_chars`; `ledger.prune_closed_after_days` is `move_closed_after_days`.
+- A track whose work never touches the build (a marketing kit, a docs track) gets `"check_command": ""` in its `tracks` entry; a track with its own build gets its own command. Absent = the repo-wide one.
+- `index_skip_suffixes` if the repo carries file types beyond the built-in binaries and media that must never become index rows.
+
+Verify in a fresh session: the context arrives as "part n of m" strings, part 1 carries the directive and a `Payload: N chars in M part(s)` line, and `/compact` is followed by the slim rules reminder.
+
 ## 7 — Commit
 
 Single track: `Session: protocol migrated to the global layer`. Multi-track: `Session (<track>): …`. Push per `push_policy`. Record the migration in `DECISIONS.md` (one entry: what moved where, the caps chosen, the tracks declared).

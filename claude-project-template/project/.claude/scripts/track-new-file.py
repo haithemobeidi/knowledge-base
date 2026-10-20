@@ -47,6 +47,18 @@ SKIP_FILENAMES = (
     "SESSION_LEDGER.md",
 )
 
+# Binary and media files are never index rows — the index is one line per
+# file someone might READ. A marketing kit dropped into the repo queued every
+# PNG, JPG and zip it carried (2026-10-19), and the /end gate then demanded a
+# description for each. protocol.json `index_skip_suffixes` extends this.
+SKIP_SUFFIXES = (
+    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".ico", ".icns", ".psd", ".ai", ".sketch", ".fig",
+    ".mp4", ".mov", ".webm", ".mkv", ".mp3", ".wav", ".ogg", ".m4a", ".flac",
+    ".zip", ".7z", ".gz", ".tgz", ".tar", ".rar", ".jar", ".apk", ".aab", ".ipa", ".dmg", ".msi", ".exe",
+    ".dll", ".so", ".dylib", ".a", ".lib", ".o", ".class", ".pyc", ".wasm",
+    ".woff", ".woff2", ".ttf", ".otf", ".eot", ".pdf", ".db", ".sqlite", ".sqlite3", ".bin", ".dat",
+)
+
 
 def project_relative(file_path: str) -> str | None:
     """POSIX path relative to $CLAUDE_PROJECT_DIR, or None if outside it."""
@@ -78,6 +90,10 @@ def wants_entry(rel: str, cfg, index_text: str | None) -> bool:
     """The one rule every path goes through: not bookkeeping, not a skip
     prefix, not already in the index."""
     if pathlib.PurePath(rel).name in SKIP_FILENAMES:
+        return False
+    suffix = pathlib.PurePath(rel).suffix.lower()
+    extra = tuple(str(x).lower() for x in (cfg.get("index_skip_suffixes") or []))
+    if suffix and suffix in SKIP_SUFFIXES + extra:
         return False
     if any(rel == p.rstrip("/") or rel.startswith(p) for p in skip_prefixes(cfg)):
         return False

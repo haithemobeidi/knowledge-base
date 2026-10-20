@@ -25,7 +25,7 @@ Stale mtimes (a pull, an editor touching files) make git flag unchanged files as
 
 ## Step 0c — Project check + secret scan (FAIL FAST)
 
-If `check_command` is set, run it (e.g. `pnpm check`: build freshness, contract drift, typecheck). **Non-zero exit → STOP.** Report the failure and fix it, or get an explicit override, before continuing. A tree that fails this guard has silent drift; do not commit and push it.
+Run the check command: in a multi-track repo, your track's own `check_command` from its `tracks` entry when it declares one (`""` means this track has no check — a marketing kit or docs track that never touches the build), otherwise the repo-wide `check_command`; if you touched `shared_paths`, run the repo-wide one as well (e.g. `pnpm check`: build freshness, contract drift, typecheck). **Non-zero exit → STOP.** Report the failure and fix it, or get an explicit override, before continuing. A tree that fails this guard has silent drift; do not commit and push it.
 
 If `secret_scan` is true (default), run:
 
@@ -159,7 +159,7 @@ A post-`/end` mini-wrap appends an entry covering ONLY the delta since the previ
 python .claude/scripts/check-payload-budget.py
 ```
 
-Reports the assembled session-start payload against `payload.target_chars`. Over budget → **shrink the largest contributor, never raise the budget.** The budget is the only cap that stays honest when mass moves between documents; raising it is how the last one failed.
+Reports the assembled session-start payload against `payload.target_chars`, and its delivery: how many parts the hook will emit against the `--part` entries wired in `settings.json` (Claude Code caps one hook string at 10,000 characters). **UNDELIVERABLE** means the next session would not receive everything — fix that first (resync `settings.json`, or shrink). Over budget → **shrink the largest contributor, never raise the budget.** The budget is the only cap that stays honest when mass moves between documents; raising it is how the last one failed.
 
 ## Step 4 — Commit and push
 

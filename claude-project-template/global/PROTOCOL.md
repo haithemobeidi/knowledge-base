@@ -21,6 +21,7 @@ Every rule here traces to a measured failure on a real project:
 6. **The ledger grew into what it was meant to prevent** (99 open items averaging 2,500 characters, ~250KB injected at every session start). → Size caps and truncation at injection.
 7. **Capping the ledger just moved the mass.** Twelve days after those caps landed, `CURRENT_STATE.md` had gone from 5,968 characters to 92,900 and session start was injecting 163,478 — five times a normal full startup payload. A per-contributor cap relocates bloat; it does not remove it. → One budget on the **assembled payload**, measured and printed every session; per-document caps demoted to hints; a manifest instead of full text. General lesson: measure the total the consumer receives, not the inputs feeding it.
 8. **A stale document cannot be caught by comparing it to other documents.** 146 ledger IDs were cited in one CURRENT_STATE and 65 were already struck; copy-through is the default editing action and nothing re-verified it. The cross-check could not see it, because stale docs agree with each other perfectly. → `check-ledger-refs.py`, plus a receiver read-back at start.
+9. **The budget sat above the harness's delivery cap for a month.** Claude Code caps one hook string at 10,000 characters and replaces anything longer with a 2,000-character preview plus a file path it does not ask the model to read; the 25,000 budget was set against the `MEMORY.md` ceiling, not against that. 38 consecutive session starts on the live project delivered a preview of a 48,000-character payload, and 7 of them read the file. Nothing measured delivery, so nothing noticed. → The hook emits the payload in labelled parts, each under the cap, and the budget checker fails on an undeliverable payload. General lesson: a budget is only as real as the channel it travels through — measure what arrives, not only what is sent.
 
 ---
 
@@ -78,7 +79,9 @@ No per-session handoff snapshot files: past projects accumulated 30+ and nobody 
 
 ## The injection budget — the one number that stays true
 
-**Every session start injects a payload, and that payload has a budget: `payload.target_chars`, default 25,000** (the ceiling Claude Code puts on its own auto-loaded `MEMORY.md`). The hook measures it and `check-payload-budget.py` reports it.
+**Every session start injects a payload, and that payload has a budget: `payload.target_chars`, default 25,000** (the ceiling Claude Code puts on its own auto-loaded `MEMORY.md`). The hook measures it, prints the size in part 1, and `check-payload-budget.py` reports it.
+
+**Delivery is a separate, harder constraint.** Claude Code caps one hook string at 10,000 characters; anything longer reaches the model as a 2,000-character preview and a file path it is not asked to read. So the hook emits the payload as **parts**: `.claude/settings.json` wires `session-start-context.py --part 1` … `--part 8`, each part stays under `payload.part_chars` (9,000), and every part is labelled "part n of m" because they arrive in any order. Part 1 carries the directive and the payload size line; the others wait for part 1's cache so all of them reflect one fetch and one decision. The deliverable ceiling (entries × `part_chars`) is a safety net, not a budget — `check-payload-budget.py` fails when a part is over the cap or more parts are needed than entries are wired, and the budget stays 25,000. After a compaction, only a slim rules reminder is re-injected (`compact` matcher): the project `CLAUDE.md` comes back by itself, the state docs do not.
 
 Every other cap here measures ONE input — an item, a cell, a file. Only this one measures what the model actually receives, and that is the only number that stays honest when the mass moves from one document to another. It moved once already: the 2026-09-08 ledger caps worked, the ledger fell from 397KB to 259KB, and twelve days later `CURRENT_STATE.md` had gone from 5,968 characters to 92,900 and the injection was 163,478 — about five times a normal full Claude Code startup payload. Nobody saw it, because the metric being watched had improved.
 
@@ -86,7 +89,7 @@ Every other cap here measures ONE input — an item, a cell, a file. Only this o
 
 What is injected, and what is not:
 
-- **Injected:** CURRENT_STATE whole (it is small by construction) · a **manifest** of every open ledger item, one title line each · the **full text** of only the items the NEXT ACTION cites · the spine · your track's newest handoff entry · the directive.
+- **Injected:** CURRENT_STATE whole (it is small by construction) · a **manifest** of every open ledger item, one line each as `ID →tag (date) TITLE` (the provenance parenthetical is never shown — the title is) · the **full text, capped at `gating_item_max_chars`,** of the items each track's NEXT ACTION section cites (`max_gating_items` per section, so every track's citations expand) · the spine · your track's newest handoff entry · the directive.
 - **Not injected, read on demand:** every other ledger item (grep its ID) · closed items · older handoff entries · CODEBASE_INDEX · notes, bug and backlog docs.
 
 A document that is never injected is free and may grow without limit. That is why nothing needs to be summarized or deleted to stay in budget.
@@ -107,7 +110,7 @@ The **"status at a glance" spine table in `ROADMAP.md`** is the sole answer to "
 
 ## Session start
 
-Mostly automatic: the `SessionStart` hook runs the worktree guard, checks the global rules are installed, fetches origin, and injects the state docs plus the cross-check directive. `/start` exists for when the hook did not fire. In order:
+Mostly automatic: the `SessionStart` hook runs the worktree guard, checks the global rules are installed, fetches origin, and injects the state docs plus the cross-check directive — as several labelled parts, read all of them (see the injection budget). `/start` exists for when the hook did not fire. In order:
 
 0. **Worktree/branch guard** — never work from `.claude/worktrees/`, a `claude/*` branch, or a branch listed in `protocol.json` → `protected_branches` (a fork's read-only `main`).
 0.5 **Sync guard** — `git fetch` before reading any doc. Behind + clean → `git pull --ff-only`. Behind + dirty, or diverged → stop and surface. Offline → proceed, report currency as unverified. `git status` saying "up to date" without a fetch proves nothing; a stale checkout looks complete, not broken. If `upstream_ref` is set (a fork), that remote is fetched too and the drift count is **reported, never acted on** at start — catching up is a session decision at a quiet point.
@@ -183,7 +186,8 @@ Declared in `protocol.json` → `tracks` (name, ID prefix, owned paths) and `sha
 
 | Hook | Script | Does |
 |---|---|---|
-| `SessionStart` (`startup\|resume\|clear`) | `session-start-context.py` | Worktree/branch guard (`protected_branches`) → global-install check → fetch + stale refusal → upstream drift count (`upstream_ref`) → injects tracks, CURRENT_STATE, open ledger items (truncated, grouped by track), spine (bloat warning), last handoff lines (+ per track), template-drift note, cross-check / track-gate directive |
+| `SessionStart` (`startup\|resume\|clear`), wired 8× as `--part 1..8` | `session-start-context.py` | Worktree/branch guard (`protected_branches`) → global-install check → fetch + stale refusal → upstream drift count (`upstream_ref`) → builds the directive (track gate / cross-check), tracks, CURRENT_STATE, the ledger (v2: `ID →tag (date) TITLE` manifest + capped full text of the items each NEXT ACTION section cites; v1: truncated items), spine (bloat warning), last handoff line per track, template-drift note → **packs it into parts under 10,000 chars**: part 1 builds, prints the payload size and caches; parts 2–8 wait for the cache and emit their slice (or nothing) |
+| `SessionStart` (`compact`) | `session-start-context.py --slim` | Re-injects the standing rules after a compaction (your track and its owned paths, the ledger rule, the check command) — the state docs are not re-injected; re-read your NEXT ACTION section if the summary lost it |
 | `PostToolUse` (`Write\|Edit\|Bash\|PowerShell`) | `track-new-file.py` | Queues unindexed paths (skip prefixes from `protocol.json`). Write/Edit queue the touched file; a shell call queues every untracked file in the repo afterwards, because scripts, generators, heredocs and `git mv` create files the file tools never see (24 files slipped past the old `Write\|Edit` matcher in one session) |
 | `Stop` | `stop-clean-tree-check.py` | Blocks a stop only when a Session commit just landed and files this track is responsible for are still dirty |
 

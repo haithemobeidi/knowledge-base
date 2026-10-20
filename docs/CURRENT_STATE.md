@@ -30,10 +30,12 @@ The template is the KB's real deliverable. This table is what "where do we stand
 
 | Project | Protocol | Synced to template | Notes |
 |---|---|---|---|
-| `claude-project-template` | **v2** (`70dc989`) | — | canonical |
-| BuddySystem | **v2** (bootstrapped 2026-10-02) | yes, plus the ledger-archive fix below | 3 tracks (coping C, impulse I, rephrase R) |
-| Playmoir / Checkpoint | v1 | behind | 3 tracks, 89 open ledger items, 95KB CURRENT_STATE — the migration case |
-| everything else | v1 | unknown | not surveyed |
+| `claude-project-template` | **v2**, hook delivers in parts since 2026-10-20 | — | canonical |
+| BuddySystem | **v2** (bootstrapped 2026-10-02) | behind — needs the 2026-10-20 resync (`check-template-drift.py --sync`) | 3 tracks (coping C, impulse I, rephrase R) |
+| Playmoir / Checkpoint | **v2** (migrated 2026-09-22) | resync to the parts hook in progress 2026-10-20, by its own session | 5 tracks (D, M, I, S, SO), 94 open ledger items, 20KB CURRENT_STATE — still ~210% of budget |
+| Nuveen-Reporting | v1 | behind | single track |
+| Tagsmith, armada-odin3 | protocol.json without a version (v1) | behind | not surveyed further |
+| TrainerKit, CLI-LLM-Hub, D4-Optimizer, MPV-Cinema, namesmith | pre-layering (own root PROTOCOL.md) | never installed | migration per `MIGRATION.md` §1–6 |
 
 **Machines:** global layer installed on this Windows desktop. The ARM laptop and
 the Linux laptop have not pulled since `70dc989` — they need `git pull` **and**

@@ -19,7 +19,7 @@ You are making promo content for an app Haithem built. The deliverable is a fold
 
 Platforms change their rules every few months. Before building, send a Sonnet research subagent (never search inline) with today's date, official sources first, a claim / source / date / verbatim quote per finding, and older-than-a-year sources flagged. Then verify the load-bearing claims yourself (fetch the source, read the quote).
 
-**The baseline, verified 2026-09-27** (re-check anything older than ~3 months):
+**The baseline, verified 2026-09-27, Instagram rows extended 2026-10-19** (re-check anything older than ~3 months):
 
 | Rule | Source | Strength |
 |---|---|---|
@@ -31,6 +31,11 @@ Platforms change their rules every few months. Before building, send a Sonnet re
 | Format: 1080×1920, 9:16, H.264 + AAC, 30 fps. A 16:9 video posts as a Reel but letterboxed | Meta + TikTok specs | official |
 | Length: no official target on either. Reels 45–60 s did best in a 2026 study of 6M Reels; TikTok "faster" is third-party advice | third-party | medium / weak |
 | Instagram profile grid crops covers to **3:4** (since Jan 2025, Mosseri); TikTok's grid crop is disputed (1:1 vs 3:4) → keep cover text in the centre square | third-party reporting an official announcement | medium |
+| Instagram: accounts that "primarily post unoriginal content in photos or carousel posts" are no longer recommended (extended from Reels, May 2026); third-party material must be "materially" added to, e.g. "unique text on the content itself that provides more context than just describing what's happening" → a news/aggregator post needs its own angle | Instagram announcement quoted by MediaPost, 2026-05-01 | official (via press) |
+| Instagram feed images: **3:4 (1080×1440)** shows uncropped: "if you upload a 3:4 image, it'll now appear just exactly as you shot it"; 4:5 still works but the 3:4 grid crops it; some schedulers still force 4:5 → upload from the app | Mosseri on Threads, via RouteNote 2025-05-29 | official (via press) |
+| Carousels: a skipped carousel may get "a second chance", re-shown from **slide 2** → slide 2 must stand on its own; carousels lead feed engagement (~0.55% vs Reels ~0.50% vs single images ~0.35%) | Mosseri via Social Media Today 2024-10-17; Socialinsider Q1 2026 | official + study |
+| Top ranking signals: "watch time, likes and sends"; sends weigh most for reaching non-followers. Posts that "explicitly ask for engagement through shares, comments, tags" are not recommended | Mosseri via Social Media Today 2025-01-22; Instagram via SMT 2024-06-05 | official (via press) |
+| Never use an image model for a post about a real game or product: invented art, the "AI info" label, and stale facts. Official art in HTML templates instead | `news-graphics-from-research-and-official-art-not-an-image-model.md` | lesson |
 | Links in captions are never clickable; a Reel link sticker needs 10k followers → "Link in bio" | long-standing | high |
 | Instagram throttles videos detected as reposted from TikTok (watermark / audio / hash signals) → post each file natively on each app | Instagram 2026 originality detection, third-party | medium |
 | Baked-in licensed music is not what TikTok's Commercial Music Library restricts (that governs the in-app sound picker), but BOTH apps fingerprint audio, and stock tracks registered for Content ID can be flagged → keep the licence certificate | TikTok CML page (official) + Pixabay's blog | official + vendor |

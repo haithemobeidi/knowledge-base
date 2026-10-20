@@ -164,13 +164,22 @@ The `SessionStart` hook emits a **budgeted payload** with a stated target and a 
 |---|---|---|
 | App state | ~2.5KB | `CURRENT_STATE.md` in full — it is small by construction |
 | Ledger manifest | ~10KB | One line per open item, all of them, grouped by track |
-| Gating items | ~3KB | Full text of the items that gate a NEXT ACTION |
+| Gating items | ≤ 1,200 each, ≤ 4 per NEXT ACTION section | Capped full text of the items each track's NEXT ACTION cites |
 | Spine | ~4.5KB | `ROADMAP.md` status table |
 | Handoff | ~2KB | **Your track's last entry only** |
-| Directive | ~3KB | Track gate, cross-check, acceptance |
+| Directive | ~3KB | Track gate, cross-check, acceptance — in part 1 |
 | **Total target** | **≤ 25KB** | matching Claude Code's own `MEMORY.md` ceiling |
+| **Delivery** | **≤ 9,000 chars per part, 8 parts wired** | Claude Code caps one hook string at 10,000; the payload travels as labelled parts (see below) |
 
-The total is **measured and printed at every session start.** That number is the guard; the per-part budgets are hints. If the total is over, the hook says so and names the largest contributor.
+The total is **measured and printed at every session start** (part 1 carries the size line). That number is the guard; the per-part budgets are hints. If the total is over, the hook says so, and `/end` names the largest contributor.
+
+### Found after shipping: the delivery cap (2026-10-19)
+
+The budget above was set against the `MEMORY.md` ceiling. The channel it travels through has a lower one: **Claude Code caps every hook string — `additionalContext`, `systemMessage`, plain stdout — at 10,000 characters, measured per string, and replaces anything longer with a 2,000-character preview plus the path of a file it does not ask the model to read.** For a month every session start on the live project delivered that preview; 7 of 38 sessions read the file, the rest worked from the first 2,000 characters, which were the sync line and the top of CURRENT_STATE. The directive, the manifest and the handoff entries were at the end.
+
+The fix keeps the budget and changes the delivery. Each string is measured on its own, so `settings.json` wires the hook eight times with `--part 1..8`. Invocation 1 builds the whole payload, packs whole sections into slices under `payload.part_chars` (9,000, leaving room for the header), writes them to a per-session cache and emits slice 1 with the directive and the size line; the others wait for the cache and emit their slice, so a "behind origin" refusal is one part and the rest emit nothing. Every part is labelled "part n of m" because the harness gives no ordering guarantee. A payload needing more parts than entries says so in the last part it can reach — an absence would produce no signal — and `check-payload-budget.py` fails on it. The ceiling (72,000) is a safety net; the budget is still 25,000, and the budget is what gets enforced at `/end`.
+
+Two smaller findings from the same audit landed with it: the manifest line is now `ID →tag (date) TITLE` (cutting the raw first line at 110 chars landed inside the provenance parenthetical on 44 of 89 items), and gating is taken per NEXT ACTION section (taken across the document, all five expansions went to the first track).
 
 ### The four documents
 
@@ -244,9 +253,15 @@ New keys in `.claude/protocol.json`:
 "payload": {
   "target_chars": 25000,        // total injection budget
   "warn_over": 1.0,             // report when the total exceeds target × this
-  "manifest_title_chars": 110   // manifest line length
+  "manifest_title_chars": 110,  // how much of an item's TITLE the manifest line shows
+  "max_gating_items": 4,        // items expanded per NEXT ACTION section
+  "gating_item_max_chars": 1200,// cap on one expansion's injected text
+  "part_chars": 9000,           // one delivered part (harness caps a string at 10,000)
+  "part_wait_seconds": 45       // parts 2..N wait this long for part 1's cache
 }
 ```
+
+Per track, optionally: `"check_command"` inside the track's `tracks` entry (`""` = that track runs no check), and `index_skip_suffixes` beside `index_skip_prefixes` for file types the index hook should never queue (binaries and media are built in).
 
 Removed: `ledger.item_max_chars`, `ledger.prune_closed_after_days` (becomes `ledger.move_closed_after_days`).
 

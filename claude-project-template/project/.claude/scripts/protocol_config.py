@@ -63,13 +63,30 @@ DEFAULTS: dict = {
     # Every other cap in this protocol measures one input; this one measures
     # what the model actually receives, which is the only number that stays
     # true when the mass moves from one document to another.
+    #
+    # Delivery is a separate constraint from the budget: Claude Code caps ONE
+    # hook string at 10,000 characters (over it, the model gets a 2,000-char
+    # preview and a file path it is not asked to read). The hook therefore
+    # emits the payload as several strings — one `--part N` entry each in
+    # settings.json — of at most part_chars apiece. The deliverable ceiling is
+    # (entries wired) × part_chars; the budget stays the smaller target.
     "payload": {
         "target_chars": 25000,
         "warn_over": 1.0,
-        # How much of a ledger item's first line becomes its manifest entry.
+        # How much of a ledger item's TITLE becomes its manifest entry (the
+        # ID, tag and date are always shown; the provenance parenthetical never is).
         "manifest_title_chars": 110,
-        # Cap on how many items get FULL text because the NEXT ACTION cites them.
-        "max_gating_items": 5,
+        # How many items PER NEXT ACTION SECTION get full text because that
+        # section cites them. Per section, so every track's citations expand.
+        "max_gating_items": 4,
+        # Cap on one expanded item's INJECTED text. The ledger keeps the item
+        # whole; only the injection is cut.
+        "gating_item_max_chars": 1200,
+        # Size of one delivered part. Must stay under the harness's 10,000-char
+        # string cap with room for the part header; the hook clamps it.
+        "part_chars": 9000,
+        # How long parts 2..N wait for part 1's cache before giving up.
+        "part_wait_seconds": 45,
     },
     # The heading (case-insensitive substring) that opens the ROADMAP status spine.
     "spine_heading": "status at a glance",
@@ -93,9 +110,14 @@ DEFAULTS: dict = {
     # Extra project-relative prefixes (POSIX form) the index tracker ignores,
     # e.g. generated icons, native gen/ dirs. Merged with DEFAULT_SKIP_PREFIXES.
     "index_skip_prefixes": [],
+    # Extra file suffixes the index tracker ignores (binaries and media are
+    # built in: images, video, audio, archives, fonts, compiled output).
+    "index_skip_suffixes": [],
     "ledger": {
-        # Hard cap on one item's text (ID line + continuation lines). Longer
-        # analysis goes to a linked doc; the hook truncates at injection.
+        # v1 ONLY: hard cap on one item's text (ID line + continuation lines);
+        # the v1 hook truncates at injection. v2 has no per-item cap — the
+        # manifest protects the injection and gating_item_max_chars caps an
+        # expansion — so a v2 project may drop this key.
         "item_max_chars": 600,
         # Soft target for the open-item count; /end reports when exceeded.
         "open_soft_max": 30,
@@ -121,7 +143,10 @@ DEFAULTS: dict = {
         # (design prototypes, vendored code).
         "skip_prefixes": [],
     },
-    # Each: {"name": "desktop", "prefix": "D", "owns": ["apps/desktop/", ...]}
+    # Each: {"name": "desktop", "prefix": "D", "owns": ["apps/desktop/", ...],
+    #        "check_command": "pnpm check:desktop"}  (check_command optional: a
+    # track whose work never touches the build — a marketing kit, docs — sets
+    # "" and skips the repo-wide check; absent = the repo-wide check_command).
     "tracks": [],
     # Paths every track may edit; changes there are announced with a ledger
     # line tagged →all or →<other track>.
@@ -165,10 +190,23 @@ def load_config(proj: str | None = None) -> tuple[dict, bool]:
         prefix = str(t.get("prefix") or name[:1]).strip().upper()
         owns = [_norm_prefix(str(p)) for p in (t.get("owns") or []) if str(p).strip()]
         aliases = [str(a).strip() for a in (t.get("aliases") or []) if str(a).strip()]
-        tracks.append({"name": name, "prefix": prefix, "owns": owns, "aliases": aliases})
+        # None = key absent (use the repo-wide check_command); "" = this track
+        # declares it has no check. Callers must keep the two apart.
+        check = str(t["check_command"]).strip() if "check_command" in t and t["check_command"] is not None else None
+        tracks.append({"name": name, "prefix": prefix, "owns": owns, "aliases": aliases, "check_command": check})
     cfg["tracks"] = tracks
     cfg["shared_paths"] = [_norm_prefix(str(p)) for p in (cfg.get("shared_paths") or []) if str(p).strip()]
     return cfg, exists
+
+
+def track_check_command(cfg: dict, track: str | None) -> str:
+    """The check command a session on `track` runs at /end Step 0c: the
+    track's own if its entry declares one (including "" for none), else the
+    repo-wide `check_command`. Single-track projects pass None."""
+    for t in cfg.get("tracks") or []:
+        if track and t["name"].lower() == track.lower() and t.get("check_command") is not None:
+            return t["check_command"]
+    return str(cfg.get("check_command") or "")
 
 
 def multi_track(cfg: dict) -> bool:

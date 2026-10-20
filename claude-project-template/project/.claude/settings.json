@@ -40,7 +40,53 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/scripts/session-start-context.py\""
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/scripts/session-start-context.py\" --part 1",
+            "timeout": 90
+          },
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/scripts/session-start-context.py\" --part 2",
+            "timeout": 90
+          },
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/scripts/session-start-context.py\" --part 3",
+            "timeout": 90
+          },
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/scripts/session-start-context.py\" --part 4",
+            "timeout": 90
+          },
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/scripts/session-start-context.py\" --part 5",
+            "timeout": 90
+          },
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/scripts/session-start-context.py\" --part 6",
+            "timeout": 90
+          },
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/scripts/session-start-context.py\" --part 7",
+            "timeout": 90
+          },
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/scripts/session-start-context.py\" --part 8",
+            "timeout": 90
+          }
+        ]
+      },
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/scripts/session-start-context.py\" --slim",
+            "timeout": 30
           }
         ]
       }

@@ -103,7 +103,7 @@ Two sessions, one checkout, one branch, on purpose: they see each other's work i
 
 ## What the ledger is and isn't
 
-The ledger holds open loops a future session must act on — queued tests, gates, riders, deferred decisions — written **at the moment** they arise. It is not for bugs, feature ideas, or status (those have their own homes), and not for analysis: an item is capped at 600 characters, the analysis goes to a linked doc. The start hook injects only open items, truncated at the cap, grouped by track, and lists what is stale. Before this cap one project's ledger reached 99 open items averaging 2,500 characters and injected ~250KB at every session start.
+The ledger holds open loops a future session must act on — queued tests, gates, riders, deferred decisions — written **at the moment** they arise. It is not for bugs, feature ideas, or status (those have their own homes), and not for analysis: an item opens with a bold title line and the analysis goes to a linked doc (v1 projects cap an item at 600 characters). The start hook injects a one-line manifest of every open item (`ID →tag (date) TITLE`), expands the items each NEXT ACTION cites, groups by track, lists what is stale — and delivers it in parts, because Claude Code caps one hook string at 10,000 characters. Before this cap one project's ledger reached 99 open items averaging 2,500 characters and injected ~250KB at every session start.
 
 ## Troubleshooting
 
