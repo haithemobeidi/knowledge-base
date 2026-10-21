@@ -32,7 +32,7 @@ Platforms change their rules every few months. Before building, send a Sonnet re
 | Length: no official target on either. Reels 45–60 s did best in a 2026 study of 6M Reels; TikTok "faster" is third-party advice | third-party | medium / weak |
 | Instagram profile grid crops covers to **3:4** (since Jan 2025, Mosseri); TikTok's grid crop is disputed (1:1 vs 3:4) → keep cover text in the centre square | third-party reporting an official announcement | medium |
 | Instagram: accounts that "primarily post unoriginal content in photos or carousel posts" are no longer recommended (extended from Reels, May 2026); third-party material must be "materially" added to, e.g. "unique text on the content itself that provides more context than just describing what's happening" → a news/aggregator post needs its own angle | Instagram announcement quoted by MediaPost, 2026-05-01 | official (via press) |
-| Instagram feed images: **3:4 (1080×1440)** shows uncropped: "if you upload a 3:4 image, it'll now appear just exactly as you shot it"; 4:5 still works but the 3:4 grid crops it; some schedulers still force 4:5 → upload from the app | Mosseri on Threads, via RouteNote 2025-05-29 | official (via press) |
+| Instagram feed images: **3:4 (1080×1440)** shows uncropped: "if you upload a 3:4 image, it'll now appear just exactly as you shot it"; 4:5 still works but the 3:4 grid crops it; some schedulers still force 4:5. The web uploader starts on a square crop → pick **Original** (re-confirmed on instagram.com 2026-10-20) | Mosseri on Threads, via RouteNote 2025-05-29 | official (via press) |
 | Carousels: a skipped carousel may get "a second chance", re-shown from **slide 2** → slide 2 must stand on its own; carousels lead feed engagement (~0.55% vs Reels ~0.50% vs single images ~0.35%) | Mosseri via Social Media Today 2024-10-17; Socialinsider Q1 2026 | official + study |
 | Top ranking signals: "watch time, likes and sends"; sends weigh most for reaching non-followers. Posts that "explicitly ask for engagement through shares, comments, tags" are not recommended | Mosseri via Social Media Today 2025-01-22; Instagram via SMT 2024-06-05 | official (via press) |
 | Never use an image model for a post about a real game or product: invented art, the "AI info" label, and stale facts. Official art in HTML templates instead | `news-graphics-from-research-and-official-art-not-an-image-model.md` | lesson |
@@ -42,7 +42,7 @@ Platforms change their rules every few months. Before building, send a Sonnet re
 
 ## 3. Gather real assets
 
-- **Real screen recordings of the real app, never re-rendered UI.** A project may already have takes (Playmoir: `docs/store/play/video/clips/`). If not, record the device/app: one take per feature, scripted, 8–15 s each, demo data that looks lived-in, no personal data on screen.
+- **Real screen recordings of the real app, never re-rendered UI.** A project may already have takes (Playmoir: its social kit already holds the config, `docs/marketing/social-agent/video/config.js`, wired to the takes in `docs/store/play/video/clips/`; work there, and keep the kit's copy of the builder in step with this one). If not, record the device/app: one take per feature, scripted, 8–15 s each, demo data that looks lived-in, no personal data on screen.
 - **Music:** a licensed track (Pixabay, YouTube Audio Library). Download the **licence certificate** with it. Pixabay: signed in, the track page → the arrow beside "Free download" → "Download certificate" (a .txt). He signs in himself; never enter his password.
 - Fonts: the app's own font files (the scene page takes paths).
 
@@ -82,7 +82,7 @@ Marketing is persuasion; his rule is persuasion only in the user's own interest 
 3. Cover: "Edit cover" → "Add from camera roll" → the cover PNG.
 4. Paste the caption; link in bio set.
 5. If the audio gets flagged or muted: dispute with the licence certificate.
-6. **Never post, schedule or reply on his behalf** without his explicit yes for that specific post.
+6. If he asks, set the post up in his **already signed-in** browser (upload, crop, caption, cover) and stop: **never press Post, Share or Schedule, never reply or DM, never type a password** (ruling 2026-10-20). He reviews and presses Share.
 
 ## After
 
