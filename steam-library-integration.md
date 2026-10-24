@@ -119,4 +119,6 @@ If a future feature needs "where does game X keep its save files," don't build a
 - **Update the game before moving files by hand.** The patched build migrated the old save into the new folder on first launch without help; the hand-move would have been wasted work and a chance to corrupt something.
 - **Steam Cloud's first-upload race is a real conflict, not an error.** Opening the patched game on a second machine (a desktop) before the handheld had uploaded made that machine upload its fresh, empty per-account files. The handheld's next sync then saw "new remote + new local" and refused with a conflict; the launcher's launch-time dialog offered "Keep local" / "Keep remote", and *keep local* (the machine holding the real progress) uploaded it and overwrote the empty set. Expect this whenever cloud support arrives mid-playthrough and more than one machine touches the game; resolve from the machine with the progress, never from the fresh one.
 
+For hand-editing a save that autocloud tracks (Steam compares against `remotecache.vdf` at launch; a local-only change uploads silently, only a two-sided change prompts), see [[encrypted-unreal-save-patch-one-block-rehash-header]].
+
 If you *do* end up needing to read a save tree out of storage you can't reach directly, [[app-export-as-read-channel-into-private-storage]] is the trick.
