@@ -141,3 +141,4 @@ It is also the verification-side twin of [instrument-before-patching.md](./instr
 
 - [[compose-invisible-text-localcontentcolor]] — where the vacuous-assertion case above came from, and the framework-default bug the broken guard was written to catch.
 - [[resolve-versions-from-the-registry-not-a-search-index]] — same family, different instrument: the endpoint that answered you was not the one that knows.
+- [[powershell-args-parameter-silently-empty]] — the launch-time form: a spawn probe whose "no survivors afterwards" check could not come back red, because the child had already run and exited. Watch the children as they appear.
