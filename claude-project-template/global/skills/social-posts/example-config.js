@@ -5,7 +5,8 @@
 const SOCIAL = {
   name: "myapp",                        // output prefix: out/myapp-reels.mp4
   brand: {
-    word: "MYAPP",                      // the card wordmark
+    word: "MYAPP",                      // the card wordmark (typed in the display font)
+    // logo: "../brand/logo.svg",        // optional: an outlined lockup file the cards draw instead of the word
     accent: "#A78BFA",                  // kicker colour
     fonts: { display: "fonts/display.ttf", body: "fonts/body.ttf" }, // the app's real fonts
   },

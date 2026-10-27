@@ -25,6 +25,8 @@
   .card { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
     text-align: center; padding: 0 110px; }
   .word { font-family: display, sans-serif; font-weight: 700; font-size: 96px; letter-spacing: 0.14em; color: var(--text); }
+  /* brand.logo: the project's outlined lockup file, drawn instead of the typed word. */
+  .logo { height: 120px; } .hook-logo { height: 64px; margin-bottom: 64px; }
   .tag { font-family: body, sans-serif; font-size: 44px; color: var(--muted); margin-top: 26px; }
   .hook { font-family: body, sans-serif; font-weight: 700; font-size: 84px; line-height: 1.08; color: var(--text); }
   /* Review overlay only (&zones=1): what each app covers. Never in a build. */
@@ -63,9 +65,11 @@
       `radial-gradient(60% 45% at 30% 30%, ${a}, transparent 70%), radial-gradient(60% 45% at 70% 70%, ${b}, transparent 70%)`;
   }
   if (s.hook) {
-    scene.insertAdjacentHTML("beforeend", `<div class="card"><div class="hook">${C.hook}</div></div>`);
+    const mark = C.brand.logo ? `<img class="hook-logo" src="${url(C.brand.logo)}">` : "";
+    scene.insertAdjacentHTML("beforeend", `<div class="card">${mark}<div class="hook">${C.hook}</div></div>`);
   } else if (s.card) {
-    scene.insertAdjacentHTML("beforeend", `<div class="card"><div class="word">${C.brand.word}</div><div class="tag">${s.tag}</div></div>`);
+    const word = C.brand.logo ? `<img class="logo" src="${url(C.brand.logo)}">` : `<div class="word">${C.brand.word}</div>`;
+    scene.insertAdjacentHTML("beforeend", `<div class="card">${word}<div class="tag">${s.tag}</div></div>`);
   } else {
     const still = Q.get("still") && !Q.get("top")
       ? `<div style="position:absolute;inset:0;background:#000 url('${Q.get("still")}') center/cover"></div>` : "";
