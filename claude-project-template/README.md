@@ -99,7 +99,7 @@ Two sessions, one checkout, one branch, on purpose: they see each other's work i
 - Each track **edits only its owned paths plus shared paths**; shared changes are announced with a tagged ledger line; deploy state lives in CURRENT_STATE's Shared block.
 - The other session's uncommitted files are **left alone and reported**; the stop hook tolerates them only inside that track's owned paths; `git add -A` is forbidden.
 - **A push publishes the whole branch** — commits that are not yours are named in the report.
-- CURRENT_STATE has one NEXT ACTION per track; handoff lines carry the track; the cross-check uses your track's last line.
+- CURRENT_STATE has one NEXT ACTION per track; handoff entries carry the track; the start hook injects each track's newest entry whole and the cross-check uses yours.
 
 ## What the ledger is and isn't
 

@@ -52,7 +52,13 @@ import subprocess
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from protocol_config import load_config, project_dir  # noqa: E402
+from protocol_config import (  # noqa: E402
+    load_config,
+    multi_track,
+    project_dir,
+    protocol_version,
+    track_names,
+)
 
 # Windows consoles default to a legacy code page (cp1252 here), and every
 # document this toolchain prints is full of arrows, em dashes and smart
@@ -93,6 +99,61 @@ def measure(proj: str) -> list[tuple[int, str]] | None:
     return rows or None
 
 
+def dump(proj: str) -> str | None:
+    """The assembled payload TEXT from the hook's --dump mode, or None."""
+    script = pathlib.Path(__file__).resolve().parent / HOOK
+    env = dict(os.environ, CLAUDE_PROJECT_DIR=proj, PYTHONIOENCODING="utf-8")
+    try:
+        return subprocess.run(
+            [sys.executable, str(script), "--dump"],
+            cwd=proj, capture_output=True, text=True, encoding="utf-8",
+            timeout=30, check=False, env=env,
+        ).stdout or None
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def handoff_probes(proj: str, cfg: dict) -> list[tuple[str, str]]:
+    """(whose, line) pairs a v2 payload must contain: the LAST line of the newest
+    handoff entry — normally its Confirm line — per track in a multi-track repo.
+
+    Parsed here on purpose rather than imported from the hook: a check that
+    reuses the reader under test agrees with it by construction. Found
+    2026-10-28: every v2 payload measured fine on size while carrying only each
+    entry's title line, because the size of a section says nothing about
+    whether the right text is in it."""
+    try:
+        lines = (pathlib.Path(proj) / "docs" / "HANDOFF_LOG.md").read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    titles: list[int] = []
+    fenced = False
+    for i, ln in enumerate(lines):
+        s = ln.strip()
+        if s.startswith("```"):
+            fenced = not fenced
+        elif not fenced and s.startswith("## ") and "|" in s:
+            titles.append(i)
+
+    def last_line(i: int) -> str:
+        j = i + 1
+        while j < len(lines) and not lines[j].startswith(("# ", "## ")):
+            j += 1
+        body = [ln.strip() for ln in lines[i + 1:j] if ln.strip() not in ("", "---")]
+        return body[-1] if body else lines[i].strip()
+
+    if not multi_track(cfg):
+        return [("newest entry", last_line(titles[-1]))] if titles else []
+    probes: list[tuple[str, str]] = []
+    for name in track_names(cfg):
+        for i in reversed(titles):
+            fields = [f.strip() for f in lines[i].split("|")]
+            if len(fields) >= 3 and fields[1].lower() == name.lower():
+                probes.append((name, last_line(i)))
+                break
+    return probes
+
+
 def main() -> None:
     proj = project_dir() or str(pathlib.Path(__file__).resolve().parent.parent.parent)
     cfg, _ = load_config(proj)
@@ -119,6 +180,15 @@ def main() -> None:
     legacy_wiring = available == 0
     undelivered = max(len(parts) - available, 0) if not legacy_wiring else 0
     problems: list[str] = []
+    if protocol_version(cfg) >= 2:
+        probes = handoff_probes(proj, cfg)
+        text = dump(proj) if probes else None
+        missing = [who for who, line in probes if text is not None and line not in text]
+        if missing:
+            problems.append(
+                "the newest handoff entry is not injected whole (" + ", ".join(missing) + ") — the next "
+                "session would get its title without Next / If it fails / Confirm"
+            )
     if oversize_parts:
         problems.append(
             "part(s) over the harness's 10,000-char string cap: " + ", ".join(l for _, l in oversize_parts)

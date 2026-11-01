@@ -99,7 +99,11 @@ def run(cmd: list[str], cwd: str, timeout: int = 5) -> tuple[int, str]:
 # measure is not the artifact you ship), so the budget checker drives this mode
 # rather than re-deriving sizes from the files. Skips the fetch so it is
 # offline-safe and instant.
-MEASURE = "--measure" in sys.argv
+# --dump: the same build, printed as the assembled TEXT (sections joined, before
+# packing) instead of sizes. check-payload-budget.py reads it to confirm the
+# newest handoff entry arrives whole — a size check cannot see a missing body.
+DUMP = "--dump" in sys.argv
+MEASURE = "--measure" in sys.argv or DUMP
 # --v2 / --v1 force a document shape regardless of protocol.json. Only for
 # previewing one shape's payload against another shape's real documents, so a
 # migration can be sized before anything is migrated. The hook never passes it.
@@ -328,6 +332,9 @@ def deliver(sections: list[str], proj: str, cfg: dict, hook: dict, started: floa
     available = settings_part_count(proj)
     total = sum(len(s) for s in sections)
     target = int(pcfg.get("target_chars", 25000))
+    if DUMP:
+        sys.stdout.write("".join(sections))
+        sys.exit(0)
     if MEASURE:
         _emit_measurement(sections, pack(sections, cap), available, part_chars)
     if PART is None:
@@ -667,6 +674,52 @@ def open_ledger_view(text: str, cfg: dict, version: int = 1, gating: dict[str, s
     }
 
 
+# --- Handoff -----------------------------------------------------------------
+
+def handoff_entries(text: str) -> list[list[str]]:
+    """HANDOFF_LOG.md as entries, oldest first, each a list of lines. A v2 entry
+    is an I-PASS block: a `## date | track | area` title plus every line under it
+    up to the next title or `#`/`##` heading. A v1 entry is one `|`-separated line.
+
+    v2 shipped still reading the log with v1's rule ("every line containing a
+    `|`"), which hands over only each entry's TITLE line — the Next / If it fails
+    / Confirm body never reached the next session, on any v2 project, from
+    v2's introduction until 2026-10-28. Outside an entry, fenced blocks and HTML
+    comments are skipped: the log's header carries a format example whose title
+    and Status lines both contain `|`, which the v1 rule would hand over as the
+    newest entry of an empty log."""
+    entries: list[list[str]] = []
+    cur: list[str] | None = None
+    fenced = comment = False
+    for ln in text.splitlines():
+        s = ln.strip()
+        if cur is None and (comment or s.startswith("<!--")):
+            comment = "-->" not in s
+            continue
+        if s.startswith("```"):
+            fenced = not fenced
+            if cur is not None:
+                cur.append(ln)
+            continue
+        if fenced:
+            if cur is not None:
+                cur.append(ln)
+            continue
+        if s.startswith("## ") and "|" in s:
+            cur = [ln]
+            entries.append(cur)
+        elif re.match(r"#{1,2}\s", s):
+            cur = None
+        elif cur is not None:
+            cur.append(ln)
+        elif "|" in s:
+            entries.append([ln])
+    for e in entries:
+        while len(e) > 1 and e[-1].strip() in ("", "---"):
+            e.pop()
+    return entries
+
+
 # --- Spine -------------------------------------------------------------------
 
 def spine_view(roadmap_text: str, heading: str) -> tuple[str, list[str]]:
@@ -914,11 +967,11 @@ def main() -> None:
             "user's first message names the track this session is on, adopt it. Otherwise ASK which track "
             "with the AskUserQuestion picker (one option per track, never a plain-text question) "
             "and WAIT — do not read, edit, or report until you know. Everything in this context is scoped to "
-            "YOUR track: your NEXT ACTION section, your ledger prefix, your last handoff line, your owned paths.\n"
+            "YOUR track: your NEXT ACTION section, your ledger prefix, your last handoff entry, your owned paths.\n"
         )
         crosscheck = (
             "1. **CROSS-CHECK (mandatory).** Does YOUR track's NEXT ACTION in CURRENT_STATE agree with the "
-            "spine's CURRENT marker for your track, with your track's last HANDOFF line's 'Next:', and with "
+            "spine's CURRENT marker for your track, with your track's last HANDOFF entry's 'Next:', and with "
             "no open gate tagged for your track or →all? **If they contradict, STOP and surface it — do not "
             "pick one and proceed.**\n"
             "2. If they agree, report: **Track:** <name> / where we are (name + number from the spine) / what "
@@ -934,7 +987,7 @@ def main() -> None:
         gate = ""
         crosscheck = (
             "1. **CROSS-CHECK (mandatory).** Does CURRENT_STATE's NEXT ACTION agree with the spine's CURRENT "
-            "phase/block AND the last HANDOFF line's 'Next:', AND does no open `[ ]` ledger gate contradict "
+            "phase/block AND the last HANDOFF entry's 'Next:', AND does no open `[ ]` ledger gate contradict "
             "it? **If they contradict, STOP and surface the contradiction to the user — do NOT pick one and "
             "proceed.**\n"
             "2. If they agree, give a 4-line status: where we are (phase/block **name + number** from the "
@@ -1044,29 +1097,32 @@ def main() -> None:
         except OSError:
             pass
 
-    # Handoff — last 5 overall, plus the last line per track.
+    # Handoff — v1: the last 5 entries' title lines. v2: the newest entry WHOLE,
+    # per track in a multi-track repo.
     handoff_path = pathlib.Path(proj) / "docs" / "HANDOFF_LOG.md"
     if handoff_path.exists():
         try:
-            entries = [ln for ln in handoff_path.read_text(encoding="utf-8").splitlines() if "|" in ln]
+            entries = handoff_entries(handoff_path.read_text(encoding="utf-8"))
             if entries:
                 # v1 injected the last 5 as a scannable index, which is why the
                 # summary had to be capped at ~300 chars. v2 injects ONE entry —
                 # yours — so it can be as long as the next session needs, and
                 # the cap goes away. Reading further back is a deliberate act.
                 if version < 2:
-                    docs.append("\n### Last 5 lines of docs/HANDOFF_LOG.md\n" + "\n".join(entries[-5:]) + "\n")
+                    docs.append("\n### Last 5 lines of docs/HANDOFF_LOG.md\n"
+                                + "\n".join(e[0] for e in entries[-5:]) + "\n")
                 elif not multi_track(cfg):
                     docs.append("\n### docs/HANDOFF_LOG.md — last entry (the handoff you are accepting)\n"
-                                + entries[-1] + "\n")
+                                + "\n".join(entries[-1]) + "\n")
                 if multi_track(cfg):
                     per: list[str] = []
                     for name in track_names(cfg):
-                        last = None
-                        for ln in reversed(entries):
-                            fields = [f.strip() for f in ln.split("|")]
+                        last: list[str] | None = None
+                        legacy = False
+                        for e in reversed(entries):
+                            fields = [f.strip() for f in e[0].split("|")]
                             if len(fields) >= 3 and fields[1].lower() == name.lower():
-                                last = ln
+                                last = e
                                 break
                         if last is None:
                             # Legacy lines (before the track field existed) name the track in
@@ -1082,14 +1138,25 @@ def main() -> None:
                                 r"(?:^|[\s(,;/])(?:" + "|".join(re.escape(w) for w in words)
                                 + r")(?=\s*(?:\(|,|;|\)|track\b|$))"
                             )
-                            for ln in reversed(entries):
-                                fields = [f.strip() for f in ln.split("|")]
-                                area = fields[1] if len(fields) >= 3 else ln
+                            for e in reversed(entries):
+                                fields = [f.strip() for f in e[0].split("|")]
+                                area = fields[1] if len(fields) >= 3 else e[0]
                                 if re.search(pat, area, re.IGNORECASE):
-                                    last = ln + "   ⟵ matched by text (legacy line, no track field)"
+                                    last, legacy = e, True
                                     break
-                        per.append(f"- **{name}:** {last or '(no handoff line yet for this track)'}")
-                    docs.append("\n### Last handoff line PER TRACK (cross-check against YOUR track's line)\n" + "\n".join(per) + "\n")
+                        note = "   ⟵ matched by text (legacy line, no track field)" if legacy else ""
+                        if last is None:
+                            per.append(f"- **{name}:** (no handoff {'entry' if version >= 2 else 'line'} yet for this track)")
+                        elif version < 2:
+                            per.append(f"- **{name}:** {last[0]}{note}")
+                        else:
+                            per.append(f"\n#### {name}{note}\n" + "\n".join(last))
+                    if version < 2:
+                        docs.append("\n### Last handoff line PER TRACK (cross-check against YOUR track's line)\n"
+                                    + "\n".join(per) + "\n")
+                    else:
+                        docs.append("\n### docs/HANDOFF_LOG.md — newest entry PER TRACK (accept YOUR track's; "
+                                    "cross-check against it)\n" + "\n".join(per) + "\n")
         except OSError:
             pass
 
