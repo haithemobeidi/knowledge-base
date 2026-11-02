@@ -1,7 +1,7 @@
 ---
 stack: [steam, rust, vdf, game-library-integration, cdn]
 kind: reference
-last_verified: 2026-09-29
+last_verified: 2026-11-02
 ---
 
 # Steam library integration — cover art, install-state, and the ToS constraint that shapes the whole architecture
@@ -71,8 +71,10 @@ If you're scoping a new Steam-integrated feature, decide up front which of these
 
 Section 1's layout B (nested content-hash directories) is not just a directory shape you walk: **those hashes are the only key to assets that exist nowhere else on the public web.** Steam serves game art through two pipelines, and neither is a superset of the other:
 
-- **The store pipeline** — flat, guessable URLs (`cdn.cloudflare.steamstatic.com/steam/apps/{appid}/logo.png`, `library_hero.jpg`, …) plus `IStoreBrowseService/GetItems` with `include_assets`, which returns hash-named *store* assets (capsules, heroes, header). **GetItems never returns a `logo` entry — for any game.**
-- **The library pipeline** — hash-addressed URLs of the shape `shared.steamstatic.com/store_item_assets/steam/apps/{appid}/{hash}/logo.png`. Publicly served (200, no auth), but the hashes come from appinfo, i.e. from the Steam **client** — no public web API exposes them. The client materialises them on disk as layout B: `librarycache/{appid}/{hash}/logo.png`.
+- **The store pipeline** — flat, guessable URLs (`cdn.cloudflare.steamstatic.com/steam/apps/{appid}/logo.png`, `library_hero.jpg`, …).
+- **The library pipeline** — hash-addressed URLs of the shape `shared.steamstatic.com/store_item_assets/steam/apps/{appid}/{hash}/logo.png`, publicly served (200, no auth). The client materialises them on disk as layout B: `librarycache/{appid}/{hash}/logo.png`.
+
+**CORRECTED 2026-11-02: a public web API DOES expose most library-pipeline hashes, just not the logo's.** Earlier versions of this section said the hashes "come from the Steam client — no public web API exposes them." Wrong for everything except the logo. Keyless `IStoreBrowseService/GetItems` with `include_assets` returns `library_capsule`, `library_capsule_2x`, `library_hero`, `header` and `main_capsule` as `{hash}/{filename}` pairs under `asset_url_format`, and those are the SAME files the client caches: measured 2026-10-19, 41 of 41 URLs answered 200 and Cyberpunk 2077's files were byte-identical to its librarycache copies. Proven in production 2026-11-01 (Playmoir, D-95): a server table filled from GetItems covered all 408 games of a real library, Steam found 405 (the other three are delisted or test apps), and the first portrait rung answered 200 for 404 of 408 games, up from 340 on the flat-CDN chain. **GetItems never returns a `logo` entry, for any game,** so the logo is the one asset whose hash still has to come from a Steam client (harvest below). One more measured gap: Steam can find a game and publish no `library_hero` for it (most of that library's first-rung landscape misses), so a chain that leads with a guessed hero rung for such a game burns a 404 first; demote rungs the API says are absent.
 
 Measured on a real 728-game library (2026-08-10): 86 games have no flat `logo.png`; **21 of those have a logo that exists only in the library pipeline** (new titles are the common case), which the Steam client renders happily while every web-side probe swears no logo exists. The remaining 65 genuinely have no logo asset anywhere — for those, a text fallback is *correct* and Steam's own client shows text too.
 
@@ -81,7 +83,7 @@ Two more measured facts in the same family (2026-08-14, appids 3768760 / 1004640
 - **The portrait capsule has TWO per-game flat-CDN spellings** — `library_capsule.jpg` vs `library_600x900.jpg` — and each game answers 200 on exactly one of them and 404 on the other. Neither spelling is "the modern one"; a fallback chain must try both, in either pipeline.
 - **A hash-addressed URL serves each asset under EXACTLY the filename its librarycache hash dir holds** — you cannot harvest a hash from `logo.png` and reuse it to fetch `library_capsule.jpg`; every asset carries its own hash. And new titles may publish **ZERO** flat CDN assets at launch: the hash pipeline can be the only source of any art at all, not just logos.
 
-**The workable fix for a companion device (phone/web) that can't read librarycache:** harvest the hashes from a machine that can — one pass over `librarycache/*/*/logo.png` yields `{appid → hash}` — and mirror them through your own backend as a column the companion client reads. Two properties make this better than it sounds:
+**The workable fix for a companion device (phone/web) that can't read librarycache:** take capsule, hero and header hashes from GetItems on your server (above), and harvest only the LOGO hashes from a machine that can read librarycache — one pass over `librarycache/*/*/logo.png` yields `{appid → hash}` — and mirror them through your own backend as a column the companion client reads. Before a server accepts a harvested hash from a client, HEAD the hashed URL and keep it only on a 200, so one bad client can't plant a broken or foreign logo for everyone. Two properties make this better than it sounds:
 
 - **Hash-addressed URLs are content-addressed, so they can never go stale.** The flat URLs can and do: a publisher rebrand replaces `logo.png` in place, and any client that cached the old bytes (image loaders default to serve-from-disk-without-revalidation) shows yesterday's logo indefinitely. A rebrand changes the *hash*, so a hash URL either serves the right bytes or 404s into your fallback chain. Prefer the hashed rung FIRST when you know the hash, flat as fallback.
 - The harvest decays as the library grows — new purchases have no hash until the harvesting machine re-runs. Make the desktop client maintain the column as part of its normal library sync, not a hand-run script.
