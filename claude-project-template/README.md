@@ -43,6 +43,30 @@ It writes a managed block into `~/.claude/CLAUDE.md` (two `@import` lines pointi
 
 If a project session starts without the global layer, the start hook says so loudly before anything else.
 
+## Rolling out a template change — what runs where
+
+A change to this template reaches a project in two independent halves. Mixing them up is the usual confusion ("do I rerun this on every device?"), so:
+
+| What | Where it lives | Who has to do something | How often |
+|---|---|---|---|
+| The rules (`global/PROTOCOL.md`, `WORK_STYLE.md`) | Read live from this clone | Nobody — a `git pull` of the KB is enough | — |
+| `/start`, `/end`, the `tester` agent, global skills | **Copied** into `~/.claude/` | Each **machine**: `git pull --ff-only` in the KB, then `python claude-project-template/install-global.py` | Once per machine per template change |
+| Scripts, `settings.json`, agents in a project's `.claude/` | **Committed in the project's repo** | Each **project**, from any ONE machine: `python .claude/scripts/check-template-drift.py --sync`, commit, push | Once per project per template change |
+| The other machine's copy of that project | The project's repo | Just `git pull` the project | — |
+
+So: the install script is per machine, the sync is per project, and neither is ever per machine-and-project. A machine that has not run the install script says so in its start-up notes ("global copies stale → rerun install-global.py"); a project that has not been synced says so too ("N project file(s) differ from the template"). Both are safe to work in meanwhile: the rules and commands are written so a project on older scripts keeps its older behaviour.
+
+**To bring a project onto the current template** (an agent can do this start to finish when the user asks):
+
+1. Confirm no other session is open in that checkout, and the tree is clean or every dirty path is accounted for. Never do this mid-work or mid-wrap, and never from a session opened in a different project.
+2. `python .claude/scripts/check-template-drift.py` — lists what differs. Tell the user and get a yes.
+3. `python .claude/scripts/check-template-drift.py --sync` — copies the files and runs the adoption steps (adds any new project document, records the budget gate). If the output shows only `synced …` lines and no adoption text, the copy that ran predates adoption: run `python .claude/scripts/check-template-drift.py --adopt` once.
+4. Do what it prints under "Left for you", if anything (each line is an exact command).
+5. `python .claude/scripts/check-payload-budget.py --strict` must exit 0. Commit `.claude/` plus any docs the steps touched, push per the project's `push_policy`.
+6. Start a fresh session and check the start-up notes look right (the newest `MIGRATION.md` section says what to look for).
+
+The per-change details — what a given template version alters, and what to verify after — are in [`MIGRATION.md`](./MIGRATION.md); the newest section is last before "Commit".
+
 ## Bootstrap a new project (agent procedure)
 
 > **If you are an AI agent** and the user says "copy the KB over", "set this project up with the template", "bootstrap from the Knowledge Base", or anything equivalent: follow this exactly.
