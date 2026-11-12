@@ -5,6 +5,17 @@
 - It has its own `PROTOCOL.md` at the root → it is a **not-yet-migrated** protocol project. **Its own `PROTOCOL.md` and its own `/start` / `/end` commands win**; ignore this file (the global work style still applies). Mention once that `MIGRATION.md` in the template brings it onto this layer.
 - Otherwise this protocol is off: ignore it entirely and work normally.
 
+**"Integrate the protocol"** (also: "set up / sync / update the protocol", "bring this project onto the template") is the one request that applies in ANY repo, including one where this protocol is off. Do it start to finish; the user should not have to name a single command:
+
+1. **This machine first.** `git pull --ff-only` in the Knowledge Base clone (path at the top of `~/.claude/CLAUDE.md`), then `python "<KB>/claude-project-template/install-global.py"`. If it copied anything, say that open sessions pick it up after a restart, and carry on.
+2. **Then this project, by what it is:**
+   - has `.claude/protocol.json` → it is on the template: follow `<KB>/claude-project-template/README.md` → "Rolling out a template change" (check drift, `--sync`, `--adopt` if needed, the "Left for you" lines, the budget check, commit).
+   - has its own root `PROTOCOL.md` or older start/end commands → `<KB>/claude-project-template/MIGRATION.md` from §0.
+   - has neither → `README.md` → "Bootstrap a new project (agent procedure)".
+3. **Ask only what is the user's to decide** — which paths each track owns, the check command, the push policy, anything a doc marks as a ruling — as one batch of questions, with a recommended answer for each. Everything mechanical, just do.
+4. **Never while another session is open in the same checkout, and never mid-work or mid-wrap.** If either is true, say so and stop.
+5. **Finish with a short report:** what changed, the payload size against its budget, anything left for the user, and what to look for in the next fresh session (the newest `MIGRATION.md` section says).
+
 This file is the **single source of truth** for how sessions start, run, and end. It is imported from `~/.claude/CLAUDE.md` on every machine (see "Layering") and is never copied into a project. The step-by-step procedures live in the `/start` and `/end` commands; this file holds the rules and the reasons.
 
 ---
