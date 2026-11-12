@@ -35,7 +35,10 @@ _Last updated: <YYYY-MM-DD HH:MM> (<track, if any>)_
 
 <!-- MULTI-TRACK REPOS: one section per track, plus a Shared block. Each session
      rewrites only its own section and the shared facts it changed; the other
-     track's section is copied through verbatim.
+     track's section is copied through verbatim. A session LOADS only its own
+     track's section plus everything that is not a NEXT ACTION section, so the
+     heading must be `## … NEXT ACTION — <track name>` exactly as below, and
+     everything outside those sections is paid for by every track's session.
 
 ## 📍 NEXT ACTION — desktop
 <one line>

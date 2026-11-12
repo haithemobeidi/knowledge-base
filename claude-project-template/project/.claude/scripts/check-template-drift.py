@@ -29,6 +29,8 @@ Never blocks work: exits 0 unless --strict.
 
 from __future__ import annotations
 
+import json
+import os
 import pathlib
 import shutil
 import subprocess
@@ -56,6 +58,70 @@ for _stream in (sys.stdout, sys.stderr):
     except (AttributeError, ValueError):
         pass
 
+
+
+def _run(proj: pathlib.Path, script: str, *flags: str) -> str:
+    env = dict(os.environ, CLAUDE_PROJECT_DIR=str(proj), PYTHONIOENCODING="utf-8")
+    try:
+        return subprocess.run(
+            [sys.executable, str(proj / ".claude" / "scripts" / script), *flags], cwd=str(proj),
+            capture_output=True, text=True, encoding="utf-8", timeout=60, check=False, env=env,
+        ).stdout or ""
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def adopt(proj: pathlib.Path, tmpl: pathlib.Path) -> None:
+    """What a sync has to do besides copying files, so that bringing a project
+    onto a newer template is ONE command. Each step is safe to repeat and
+    touches nothing a session wrote:
+
+    - a new project document the template gained is added when it is missing
+      (never overwritten — it is project-owned from then on);
+    - the day the `/end` budget gate arrives (protocol.json has no
+      `payload.ceiling_chars` key yet), a payload that is already over the
+      budget gets its ceiling, so the first wrap after the sync is not stopped
+      for the size the project had before the rule existed. The key is written
+      even when empty, which is what makes this happen exactly once;
+    - anything left for a person to decide is printed as the exact command."""
+    todo: list[str] = []
+    did = False
+    queue = proj / "docs" / "LESSONS_QUEUE.md"
+    src = tmpl / "project" / "docs" / "LESSONS_QUEUE.md"
+    if (proj / "docs").is_dir() and not queue.exists() and src.exists():
+        shutil.copyfile(src, queue)
+        did = True
+        print("added   docs/LESSONS_QUEUE.md (lessons waiting to be written up live here, not on the ledger)")
+    try:
+        raw = json.loads((proj / ".claude" / "protocol.json").read_text(encoding="utf-8"))
+        gate_is_new = "ceiling_chars" not in (raw.get("payload") or {})
+    except (OSError, ValueError, AttributeError):
+        gate_is_new = False  # no readable protocol.json: nothing to record a ceiling in
+    if gate_is_new:
+        did = True
+        out = _run(proj, "check-payload-budget.py", "--init-ceiling")
+        ceilings = [ln for ln in out.splitlines() if ln.startswith("Ceiling:")]
+        print("\nThe /end budget gate arrives with this sync (PROTOCOL.md 'The injection budget').")
+        if ceilings:
+            print("This project is over the budget today, so its payload gets a ceiling at today's size.")
+            print("It only moves down, and a wrap that would exceed it stops:")
+            for ln in ceilings:
+                print("  " + ln)
+        else:
+            print("This project is inside the budget; no ceiling was needed.")
+    lessons = _run(proj, "ledger-archive.py", "--lessons")
+    if "would move" in lessons:
+        ids = next((ln.strip() for ln in lessons.splitlines() if ln.startswith("  ")), "")
+        todo.append(
+            "Lesson reminders are sitting on the ledger as open items (" + ids + "). Move them to the "
+            "lessons queue:\n      python .claude/scripts/ledger-archive.py --lessons --apply"
+        )
+    if todo:
+        print("\nLeft for you (nothing below was done):")
+        for t in todo:
+            print("  - " + t)
+    if did or todo:
+        print("\nThen commit .claude/ and docs/LESSONS_QUEUE.md, and start a fresh session to see the new start.")
 
 
 def main() -> None:
@@ -118,6 +184,20 @@ def main() -> None:
             print("Global copies are stale too — rerun install-global.py to refresh ~/.claude/commands/.")
         if not pdiff:
             print("Project already matches the template.")
+        me = ".claude/scripts/check-template-drift.py"
+        if me in pdiff:
+            # This process is the OLD copy of this script; the adoption steps
+            # belong to the one it just installed.
+            sys.stdout.flush()
+            subprocess.run([sys.executable, str(pathlib.Path(proj) / me), "--adopt", "--template", str(tmpl),
+                            "--no-fetch"], cwd=proj, check=False,
+                           env=dict(os.environ, CLAUDE_PROJECT_DIR=proj))
+        else:
+            adopt(pathlib.Path(proj), tmpl)
+        sys.exit(0)
+
+    if "--adopt" in args:
+        adopt(pathlib.Path(proj), tmpl)
         sys.exit(0)
 
     if not pdiff and not gdiff:

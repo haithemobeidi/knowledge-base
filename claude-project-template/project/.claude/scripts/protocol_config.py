@@ -87,6 +87,18 @@ DEFAULTS: dict = {
         "part_chars": 9000,
         # How long parts 2..N wait for part 1's cache before giving up.
         "part_wait_seconds": 45,
+        # Load by track (v2, two or more tracks): the size of one page of
+        # `session-start-context.py --track <name>` output. Under the limit a
+        # single tool result can carry, so a page always arrives whole.
+        "page_chars": 24000,
+        # The ratchet. {"<track>" | "project": chars} — written by
+        # `check-payload-budget.py --init-ceiling` for a payload that is over
+        # target_chars on the day the gate arrives, lowered by `--ratchet` at
+        # every /end, removed once the payload is inside the budget. Raising a
+        # number here by hand is raising the budget: the user's decision, and
+        # a DECISIONS.md entry. Absent (not even {}) = this project has not
+        # adopted the gate yet; a template sync adopts it, exactly once.
+        # "ceiling_chars": {},
     },
     # The heading (case-insensitive substring) that opens the ROADMAP status spine.
     "spine_heading": "status at a glance",
@@ -219,6 +231,30 @@ def protocol_version(cfg: dict) -> int:
         return int(cfg.get("protocol_version") or 1)
     except (TypeError, ValueError):
         return 1
+
+
+def payload_keys(cfg: dict) -> list[str]:
+    """What the budget is measured per. A v2 project with two or more tracks
+    loads by track, so each track's session has its own payload; everything
+    else has one, keyed "project"."""
+    if protocol_version(cfg) >= 2 and multi_track(cfg):
+        return track_names(cfg)
+    return ["project"]
+
+
+def payload_limit(cfg: dict, key: str) -> int:
+    """The size `/end`'s budget gate holds a payload to: `payload.target_chars`,
+    or — for a project that was already over the budget when the gate arrived —
+    the ceiling recorded for it in `payload.ceiling_chars`, which
+    check-payload-budget.py only ever lowers."""
+    pcfg = cfg.get("payload") or {}
+    target = int(pcfg.get("target_chars", 25000))
+    ceilings = pcfg.get("ceiling_chars")
+    try:
+        ceiling = int(ceilings.get(key, 0)) if isinstance(ceilings, dict) else 0
+    except (TypeError, ValueError):
+        ceiling = 0
+    return max(target, ceiling)
 
 
 def id_prefixes(cfg: dict) -> list[str]:

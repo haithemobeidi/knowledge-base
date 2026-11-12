@@ -4,7 +4,7 @@
   "$protocol_version": "Which DOCUMENT SHAPE this project is on. 1 = the original (CURRENT_STATE injected whole, ledger items injected as truncated full text, last 5 handoff lines). 2 = the budgeted shape (CURRENT_STATE is app state only; the ledger injects a one-line-per-item manifest plus full text for the items the NEXT ACTION cites; one handoff entry per track, in I-PASS shape). Set to 2 ONLY after running migrate-docs-v2.py — the scripts read this to decide how to render, and flipping it without migrating the documents just renders unmigrated docs a different way.",
   "protocol_version": 1,
 
-  "$payload": "The session-start injection budget and its delivery. target_chars is the whole assembled payload, not one document — the only cap that stays honest when mass moves between documents (PROTOCOL.md 'Why this exists' #7); 25000 matches the ceiling Claude Code puts on its own auto-loaded MEMORY.md. Delivery is a separate constraint: Claude Code caps ONE hook string at 10,000 chars, so the hook emits the payload as parts — one `--part N` entry each in settings.json (five shipped) — of at most part_chars apiece; the deliverable ceiling is entries × part_chars, and check-payload-budget.py reports both. manifest_title_chars is how much of an item's TITLE becomes its manifest line (ID, tag and date are always shown; the provenance parenthetical never is). max_gating_items is how many items PER NEXT ACTION SECTION get full text because that section cites them; gating_item_max_chars caps one expansion's injected text (the ledger keeps the item whole).",
+  "$payload": "The session-start injection budget and its delivery. target_chars is the whole assembled payload, not one document — the only cap that stays honest when mass moves between documents (PROTOCOL.md 'Why this exists' #7); 25000 matches the ceiling Claude Code puts on its own auto-loaded MEMORY.md. Delivery is a separate constraint: Claude Code caps ONE hook string at 10,000 chars, so the hook emits the payload as parts — one `--part N` entry each in settings.json (five shipped) — of at most part_chars apiece; the deliverable ceiling is entries × part_chars, and check-payload-budget.py reports both. manifest_title_chars is how much of an item's TITLE becomes its manifest line (ID, tag and date are always shown; the provenance parenthetical never is). max_gating_items is how many items PER NEXT ACTION SECTION get full text because that section cites them; gating_item_max_chars caps one expansion's injected text (the ledger keeps the item whole). With two or more tracks on v2 the hook delivers only the core and each session loads its own track with `session-start-context.py --track <name>` (page_chars = one page of that output), so the budget is PER TRACK. The budget is a GATE at /end (check-payload-budget.py --strict --ratchet). ceiling_chars is NOT set by hand: a project already over the budget gets one per track from `check-payload-budget.py --init-ceiling`, every smaller wrap lowers it, and it disappears once the payload is inside the budget — raising it is raising the budget, which is the user's decision and a DECISIONS.md entry.",
   "payload": {
     "target_chars": 25000,
     "warn_over": 1.0,
@@ -12,7 +12,8 @@
     "max_gating_items": 4,
     "gating_item_max_chars": 1200,
     "part_chars": 9000,
-    "part_wait_seconds": 45
+    "part_wait_seconds": 45,
+    "page_chars": 24000
   },
 
   "$spine_heading": "Case-insensitive text of the ROADMAP.md heading that opens the status spine table. The start hook injects everything from that heading to the next '## '.",

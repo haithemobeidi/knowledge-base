@@ -87,6 +87,8 @@ Keep it under ~150 lines. It is the only prose file edited per project.
 | `ledger.open_soft_max` | `30` | `/end` reports when exceeded and offers triage |
 | `ledger.stale_after_days` | `45` | Older open items listed at `/end` as route-or-close |
 | `ledger.prune_closed_after_days` | `7` | Struck lines older than this are pruned |
+| `payload.target_chars` | `25000` | The budget for what a session loads at start (per track in a multi-track v2 repo). `/end` Step 3b is a gate on it |
+| `payload.ceiling_chars` | absent | Never set by hand. A project over the budget when it adopts the gate gets a ceiling at that day's size from the template sync; every smaller wrap lowers it; nothing raises it |
 | `tracks` | `[]` | Parallel tracks: `{name, prefix, owns[], aliases[]}` each (aliases = words your old docs use for it, e.g. `android` for `mobile`) |
 | `shared_paths` | `[]` | Paths every track may edit, with an announcement |
 
@@ -99,11 +101,14 @@ Two sessions, one checkout, one branch, on purpose: they see each other's work i
 - Each track **edits only its owned paths plus shared paths**; shared changes are announced with a tagged ledger line; deploy state lives in CURRENT_STATE's Shared block.
 - The other session's uncommitted files are **left alone and reported**; the stop hook tolerates them only inside that track's owned paths; `git add -A` is forbidden.
 - **A push publishes the whole branch** — commits that are not yours are named in the report.
-- CURRENT_STATE has one NEXT ACTION per track; handoff entries carry the track; the start hook injects each track's newest entry whole and the cross-check uses yours.
+- CURRENT_STATE has one NEXT ACTION per track; handoff entries carry the track.
+- **A session loads its own track, not every track's** (v2): the start hook injects the sync result, the track list and the directive; once the track is named, `python .claude/scripts/session-start-context.py --track <name>` prints that track's NEXT ACTION, the shared state, the ledger items it acts on, the spine and its newest handoff entry. The budget is per track.
 
 ## What the ledger is and isn't
 
 The ledger holds open loops a future session must act on — queued tests, gates, riders, deferred decisions — written **at the moment** they arise. It is not for bugs, feature ideas, or status (those have their own homes), and not for analysis: an item opens with a bold title line and the analysis goes to a linked doc (v1 projects cap an item at 600 characters). The start hook injects a one-line manifest of every open item (`ID →tag (date) TITLE`), expands the items each NEXT ACTION cites, groups by track, lists what is stale — and delivers it in parts, because Claude Code caps one hook string at 10,000 characters. Before this cap one project's ledger reached 99 open items averaging 2,500 characters and injected ~250KB at every session start.
+
+Three things keep it from filling up again. Lessons to write up go to `docs/LESSONS_QUEUE.md`, which is never loaded at start, and take no ledger ID. An item that waits on the user's ruling starts its title with `DECIDE:` and is listed first at session start, as the user's calls. And `/end` Step 3b (`check-payload-budget.py --strict --ratchet`) stops a wrap that leaves the start payload over its limit, so past that point opening an item means closing or routing one.
 
 ## Troubleshooting
 
@@ -119,7 +124,7 @@ The ledger holds open loops a future session must act on — queued tests, gates
 
 ## Migrating an existing project
 
-See [`MIGRATION.md`](./MIGRATION.md). One session, not concurrent with another session in the same checkout.
+See [`MIGRATION.md`](./MIGRATION.md). One session, not concurrent with another session in the same checkout. A project already on the template picks up a newer one with `check-template-drift.py --sync`, which also does the adoption steps (§6d is the latest).
 
 ## What's opinionated vs generic
 

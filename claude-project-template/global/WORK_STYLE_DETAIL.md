@@ -197,7 +197,7 @@ Unless the project file says otherwise, the user launches the app and dev server
 
 The flip side of prior art: pull knowledge in from OSS, push what we learn out so the next project does not re-learn it. The Knowledge Base is its own git repo, cloned under `~/Documents` on every machine (folder name varies per device — locate it via the path recorded in `~/.claude/CLAUDE.md` or `git remote -v`).
 
-**The rule:** when work produces a lesson that would still be true in a *different* app, say so in chat immediately: `*kbdoc` + a one-line summary. `/end` Step 1f makes the wrap answer it in writing (the lessons, or "none") and puts each unwritten one on the ledger as `kbdoc: …`; the article is written after `/end` when the user asks, in the KB repo (it never rides a project commit). Writing on the spot is fine when the user explicitly asks.
+**The rule:** when work produces a lesson that would still be true in a *different* app, say so in chat immediately: `*kbdoc` + a one-line summary. `/end` Step 1f makes the wrap answer it in writing (the lessons, or "none") and puts each unwritten one in the project's `docs/LESSONS_QUEUE.md` (its own file, never loaded at session start; a lesson does not take a ledger ID); the article is written after `/end` when the user asks, in the KB repo (it never rides a project commit). Writing on the spot is fine when the user explicitly asks.
 
 **What qualifies** (all three): transferable beyond this app; non-obvious (cost real time, or the obvious approach was wrong); durable (a structural property, not a bug upstream fixes next week — a long-lived upstream gap qualifies, dated).
 

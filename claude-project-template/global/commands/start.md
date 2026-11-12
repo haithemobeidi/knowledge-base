@@ -44,10 +44,22 @@ Every file the later steps read is a tracked repo file. Reading them from a chec
 
 If `.claude/protocol.json` declares two or more `tracks`: establish which track this session is on **before reading or editing anything**. Take it from the user's first message if stated; otherwise ask with the **AskUserQuestion picker** (one option per declared track, so the user clicks instead of typing; never a plain-text question) and wait. Everything below is scoped to your track — its NEXT ACTION section, its ID prefix, its last handoff line, its owned paths.
 
+## Step 0.8 — Load your track (multi-track v2 repos: one command replaces Steps 1–4)
+
+A v2 repo with two or more tracks **loads by track**: the start hook injects only the sync result, the track list and the directive, and the session loads its own track once it knows which one it is:
+
+```bash
+python .claude/scripts/session-start-context.py --track <name>
+```
+
+It prints your track's NEXT ACTION, the shared state, the open ledger items your track acts on (tagged for it, tagged `→all`, or unassigned — the ones waiting on the user's ruling first), the status spine and the handoff entry you are accepting. If the output ends with a **PAGE** line, run the command it names too. That output IS Steps 1–4; do not also read the state docs whole — every track's state in every session is the 77,000-character payload this replaced. Then go to Step 5.
+
+(Only when the project's scripts carry it: `grep -c -- '--track' .claude/scripts/session-start-context.py` prints 0 on a project not yet synced to the template — there, the hook still injects everything and Steps 1–4 apply as written. Single-track and v1 repos: the hook injects the documents and this step does not apply; if the hook did not fire, the same command with any name prints them.)
+
 ## Steps 1–7
 
 1. Read `docs/CURRENT_STATE.md` — the **📍 NEXT ACTION** line(s) above all (your track's, in multi-track repos) and the Shared block.
-2. **v2 (`protocol_version: 2`):** the hook injects a **manifest** — every open item's first line, plus the full text of the items the NEXT ACTION cites. Each manifest line is a TITLE, not the item. Do not read any other item now; grep its ID when you work on it. **v1:** read the open `[ ]` lines only (grep `- [ ]`; closed lines are history).
+2. **v2 (`protocol_version: 2`):** the hook injects a **manifest** — every open item's first line, plus the full text of the items the NEXT ACTION cites. Each manifest line is a TITLE, not the item. Do not read any other item now; grep its ID when you work on it. Items under **YOUR CALLS** (title starts `DECIDE:`) wait on the user's ruling, not on work — name them in the report. **v1:** read the open `[ ]` lines only (grep `- [ ]`; closed lines are history).
 3. Read your track's **newest handoff entry** — that is the handoff you are accepting. Do not read further back unless something in it does not parse.
 4. Read the **status spine in `ROADMAP.md`** (heading per `spine_heading`) — the single source of truth for which phase/block is CURRENT (per track, if marked).
 5. **Working-tree check** (Step 0.5 handled the remote). Run `git update-index --really-refresh > /dev/null 2>&1 || true` to clear phantom-dirty entries, then `git status` and `git log --oneline -5`. Changes surviving the refresh are real: surface them, since they mean the previous `/end` did not reach a clean tree — unless (multi-track) they sit in the other track's owned paths, in which case name them as theirs.
@@ -62,8 +74,9 @@ Then report, 4 lines plus a sync line (5 plus track in multi-track repos):
 - Where we are (phase/block **name + number** from the spine)
 - What last session accomplished (your track's)
 - The single **NEXT ACTION**, **as you restate it** (Step 8) — or the flagged contradiction
-- **Payload:** the session-start size against budget, when the hook reported one
+- **Payload:** the session-start size against budget, when the hook (or the `--track` output) reported one
 - Open ledger items: N (call out gates; multi-track: yours + `→all` + unassigned)
+- **Your calls:** the `DECIDE:` items, one line each *(only when there are any)*
 - **Sync:** `synced to origin @ <short-sha>`, plus `(pulled N)` or `(⚠️ fetch failed — currency unverified)`; forks add `upstream: +N` or `current`
 
 **Trust, but verify.** CURRENT_STATE is hand-written and CAN be wrong. The spine wins any status disagreement, and CURRENT_STATE gets fixed — never silently work around either. Numbers are frozen. **Do not** read every handoff or every doc.

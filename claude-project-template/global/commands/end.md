@@ -77,7 +77,7 @@ Do this **before** writing CURRENT_STATE, so the wrap is written against the led
 
 1. Read the ledger **from disk** (a concurrent session may have edited it).
 2. Disposition every `[ ]` item this session touched: `[x]` + `→ DONE <date>: <one line>`, or `[-]` + reason. Untouched items stay `[ ]`. **Never strike an item you merely don't recognise.** Multi-track: only your prefix's lines, plus lines tagged for you or `→all` that you resolved (note "closed by <track>").
-3. Append `[ ]` lines for anything this session queued or deferred that isn't captured — scan for "next session", "before release", "check later", riders, gates. Apply the worthiness test (open loop with a done-condition / not tracked elsewhere / can't be done in 10 minutes / one ID per loop). **The first line must be a self-contained TITLE** — it is the only part a future session sees in the manifest, so lead with the headline and put the detail on continuation lines. **There is no length cap**: keep the item whole, here. Multi-track: mint with your prefix; put `→<other track>` / `→all` right after the ID (`D-9 →mobile (2026-09-09) …`).
+3. Append `[ ]` lines for anything this session queued or deferred that isn't captured — scan for "next session", "before release", "check later", riders, gates. Apply the worthiness test (open loop with a done-condition / not tracked elsewhere / can't be done in 10 minutes / one ID per loop), and **route what fails it instead of minting an ID**: an idea → the backlog; a lesson → `docs/LESSONS_QUEUE.md`; a standing fact or a ruling already made → `DECISIONS.md` or CURRENT_STATE; a bug → the bug doc. An item that waits on **the user's ruling** rather than on work starts its title with `DECIDE:` — session start lists those first, as the user's calls. **The first line must be a self-contained TITLE** — it is the only part a future session sees in the manifest, so lead with the headline and put the detail on continuation lines. **There is no length cap**: keep the item whole, here. Multi-track: mint with your prefix; put `→<other track>` / `→all` right after the ID (`D-9 →mobile (2026-09-09) …`).
 4. **MOVE** closed lines to `docs/SESSION_LEDGER_CLOSED.md` — run the script, do not do it by hand:
 
    ```bash
@@ -102,9 +102,9 @@ This exists because copy-forward is the default editing action: every wrap re-re
 
 ## Step 1f — KB sweep (name the lessons, or say none)
 
-Answer in the report, every wrap: **did this session produce a lesson that would still be true in a different app?** Look for a root cause that took more than one attempt, a platform or tool trap, a dead end worth warning about, or a technique the user approved. List each as `*kbdoc` + one line, or write `KB: none`. Each one not written this session becomes a `[ ]` ledger line titled `kbdoc: <one-liner>`, so it can't vanish with the chat. Also count the open `kbdoc:` ledger lines and name any older than 7 days; the user decides when they get written.
+Answer in the report, every wrap: **did this session produce a lesson that would still be true in a different app?** Look for a root cause that took more than one attempt, a platform or tool trap, a dead end worth warning about, or a technique the user approved. List each as `*kbdoc` + one line, or write `KB: none`. Each one not written this session becomes a `- [ ] (<date>, <track>) <one-liner>` entry in **`docs/LESSONS_QUEUE.md`** (create it from the template's copy if the project has none), so it can't vanish with the chat. **Not a ledger line, and no ledger ID.** Also count the open entries in that file and name any older than 7 days; the user decides when they get written.
 
-This step exists because the rule lived only as prose ("flag it in chat"): 17 sessions in a row produced no tag and the KB went 9 days without a lesson (2026-09-21 → 09-30), while two flagged lessons sat unwritten on the ledger. A step with a written answer cannot be silently skipped.
+This step exists because the rule lived only as prose ("flag it in chat"): 17 sessions in a row produced no tag and the KB went 9 days without a lesson (2026-09-21 → 09-30). It then sent every unwritten lesson to the ledger, where on one project 11 of 124 open items were write-up reminders riding in every session's start payload — so the queue is its own file, which is never loaded at start. A step with a written answer cannot be silently skipped.
 
 ## Step 2 — Reconcile the spine, then overwrite `docs/CURRENT_STATE.md`
 
@@ -153,19 +153,27 @@ Single-track repos drop the `<track>` field.
 
 A post-`/end` mini-wrap appends an entry covering ONLY the delta since the previous one.
 
-## Step 3b — Payload budget
+## Step 3b — Payload budget (a GATE: non-zero exit → STOP)
 
 ```bash
-python .claude/scripts/check-payload-budget.py
+python .claude/scripts/check-payload-budget.py --strict --ratchet
 ```
 
-Reports the assembled session-start payload against `payload.target_chars`, and its delivery: how many parts the hook will emit against the `--part` entries wired in `settings.json` (Claude Code caps one hook string at 10,000 characters). **UNDELIVERABLE** means the next session would not receive everything — fix that first (resync `settings.json`, or shrink). Over budget → **shrink the largest contributor, never raise the budget.** The budget is the only cap that stays honest when mass moves between documents; raising it is how the last one failed.
+Measures what the next session will load — per track in a multi-track repo (the start hook plus that track's `--track` load) — against its **limit**: `payload.target_chars`, or the ceiling recorded for it in `protocol.json` → `payload.ceiling_chars` when the project was already over the budget when this gate arrived. **Non-zero exit → STOP. Do not commit the wrap** until it passes; the output names the payload, how far over it is and its largest contributor.
+
+- **OVER ITS LIMIT** — this session left a payload bigger than it is allowed to be. Shrink what this session added: close ledger items that are done; route the ones that fail the worthiness test (idea → backlog, lesson → `docs/LESSONS_QUEUE.md`, standing fact → DECISIONS.md); cut narrative out of CURRENT_STATE (it belongs in the handoff entry, which costs nothing here). Move text, never delete it, and never strike an open loop to make room. In a multi-track repo an item tagged `→all` lands in every track's payload — if that is what tipped another track over, retag it for the tracks that actually act on it.
+- **UNDELIVERABLE** — the next session would not receive everything (a hook part over the cap, more parts than `settings.json` wires, a handoff entry not loaded whole, an open item no track's session loads). Fix that first.
+- **Over budget, inside its ceiling** — passes. `--ratchet` lowers the ceiling to the new size whenever the payload ends a wrap smaller, and removes it once the payload is inside the budget; commit `.claude/protocol.json` with the wrap when it changed.
+
+**A project whose scripts predate the gate** (`grep -c init-ceiling .claude/scripts/check-payload-budget.py` prints 0 — the start hook will have reported template drift) runs this step without `--strict --ratchet`, reports the size, and says in the report that the gate arrives with the template sync (`MIGRATION.md` §6d). Do not sync mid-wrap.
+
+**Never raise `target_chars` or a ceiling, and never run `--init-ceiling` to get past this step** (it works once, on the day a project adopts the gate, and does nothing after). Raising either is the user's decision, in so many words, recorded in DECISIONS.md. This step reported for seven weeks before it was a gate, and the payload on the live project went from 53,000 to 77,000 characters while every wrap printed "over budget": a check that cannot fail is a notice.
 
 ## Step 4 — Commit and push
 
 `git status` to confirm what changed. Stage **explicit paths** — never `git add -A` / `git add .`:
 
-- `docs/CURRENT_STATE.md`, `docs/HANDOFF_LOG.md`, `docs/SESSION_LEDGER.md`, `docs/CODEBASE_INDEX.md` (if updated), `ROADMAP.md` (if the spine changed)
+- `docs/CURRENT_STATE.md`, `docs/HANDOFF_LOG.md`, `docs/SESSION_LEDGER.md`, `docs/SESSION_LEDGER_CLOSED.md` and `docs/LESSONS_QUEUE.md` (if they changed), `docs/CODEBASE_INDEX.md` (if updated), `ROADMAP.md` (if the spine changed), `.claude/protocol.json` (if Step 3b lowered a ceiling)
 - Any other files the user confirmed should be committed — in a multi-track repo, only files inside your owned paths or the shared paths.
 
 Commit message: `Session: <one-line summary>` — multi-track: `Session (<track>): <summary>`.
@@ -200,8 +208,9 @@ If a push was made, both must match; if they differ, the push didn't land — re
 1. What was accomplished this session (track named)
 2. What's next
 3. Anything to watch for next session (incl. the other track's files left in the tree, and any commits of theirs your push carried)
-4. Open ledger items: N (IDs that gate the next action; count vs soft max; stale items listed)
-5. KB: this session's `*kbdoc` lessons (or "none"), plus the open `kbdoc:` ledger count (Step 1f)
+4. Open ledger items: N (IDs that gate the next action; count vs soft max; stale items listed; the `DECIDE:` items as **Your calls**)
+5. KB: this session's `*kbdoc` lessons (or "none"), plus the open count in `docs/LESSONS_QUEUE.md` (Step 1f)
+6. Payload: the size against its limit from Step 3b, and any ceiling it lowered
 
 ## After `/end` — the mini-wrap rule
 

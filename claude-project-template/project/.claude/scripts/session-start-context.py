@@ -38,6 +38,20 @@ Order of operations (each one exists because skipping it once cost real time):
 6. `--slim` (wired on the `compact` matcher) re-injects only the standing
    rules after a compaction: the project CLAUDE.md comes back by itself, the
    hook payload does not.
+7. LOAD BY TRACK (v2 projects with two or more tracks). The hook cannot know
+   which track a session is on — that is in the user's first message — so it
+   used to inject every track's state into every session: on a five-track
+   project a marketing session received four other tracks' NEXT ACTIONs,
+   handoffs and ledger items, 77,000 characters against a 25,000 budget, and
+   the wiring was raised from 8 parts to 10 to keep delivering it. Now the
+   hook injects only the CORE (sync result, the directive, the track list),
+   and the session loads its own track with one command once the track is
+   known: `session-start-context.py --track <name>` prints that track's NEXT
+   ACTION, the shared state, the ledger items tagged for it or for everyone,
+   the spine and its newest handoff entry. A session's payload is therefore
+   what a single-track project's would be. Run by the model, the output is
+   not a hook string and the 10,000-character cap does not apply; it is paged
+   at `payload.page_chars` so one tool result always carries a whole page.
 
 All project-specific values come from `.claude/protocol.json` via
 protocol_config.py — never edit this script per project.
@@ -67,6 +81,7 @@ from protocol_config import (  # noqa: E402
     id_prefixes,
     template_currency,
     load_config,
+    payload_limit,
     multi_track,
     prefix_map,
     project_dir,
@@ -75,6 +90,15 @@ from protocol_config import (  # noqa: E402
     track_aliases,
     track_names,
 )
+
+# `--track`, `--dump` and `--measure` print documents full of arrows and em
+# dashes straight to stdout; a Windows console on a legacy code page dies on
+# them. (The hook path is JSON with ASCII escapes and was never affected.)
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
 
 ITEM_RE = re.compile(
     r"^- \[( |x|-)\] ([A-Za-z]{1,4})-(\d+)\s*(?:(?:→|->)\s*[\w-]+\s*)?\((\d{4}-\d{2}-\d{2})"
@@ -126,6 +150,14 @@ try:
 except ValueError:
     PART = None
 
+# --track NAME: print (or, with --measure / --dump, size up) what a session on
+# that track loads — see module doc, 7. --page N picks a page of a long one.
+TRACK: str | None = (_arg_value("--track") or "").strip() or None
+try:
+    PAGE = max(int(_arg_value("--page") or 1), 1)
+except ValueError:
+    PAGE = 1
+
 # Room left in every part for its header line (part n of m, payload size line).
 PART_HEADER_RESERVE = 450
 HARNESS_STRING_CAP = 10000
@@ -135,7 +167,7 @@ def hook_input() -> dict:
     """The JSON Claude Code pipes to a hook (session_id, source, cwd …). Read
     only when a hook flag is present and stdin is not a terminal: run by hand,
     a read would block; run by the budget checker, there is nothing to read."""
-    if MEASURE or not (PART or SLIM):
+    if MEASURE or TRACK or not (PART or SLIM):
         return {}
     try:
         if sys.stdin is None or sys.stdin.isatty():
@@ -323,9 +355,12 @@ def wait_for_cache(path: pathlib.Path, started: float, wait_s: float) -> dict | 
     return None
 
 
-def deliver(sections: list[str], proj: str, cfg: dict, hook: dict, started: float) -> None:
+def deliver(sections: list[str], proj: str, cfg: dict, hook: dict, started: float,
+            hook_sections: list[str] | None = None, core_only: bool = False) -> None:
     """Emit the payload — whole (legacy wiring), or as slice PART of the
-    packed parts. Never returns."""
+    packed parts. Never returns. `hook_sections` (measuring a `--track` load)
+    is the subset the hook itself delivers: only that part travels as hook
+    strings, so only that is packed into parts."""
     pcfg = cfg.get("payload") or {}
     part_chars = int(pcfg.get("part_chars", 9000))
     cap = min(part_chars, HARNESS_STRING_CAP - 500) - PART_HEADER_RESERVE
@@ -336,7 +371,9 @@ def deliver(sections: list[str], proj: str, cfg: dict, hook: dict, started: floa
         sys.stdout.write("".join(sections))
         sys.exit(0)
     if MEASURE:
-        _emit_measurement(sections, pack(sections, cap), available, part_chars)
+        _emit_measurement(
+            sections, pack(sections if hook_sections is None else hook_sections, cap), available, part_chars
+        )
     if PART is None:
         _write_context("".join(sections))
     available = available or 1
@@ -350,6 +387,11 @@ def deliver(sections: list[str], proj: str, cfg: dict, hook: dict, started: floa
             + (" ⚠️ OVER BUDGET: shrink the largest contributor at /end" if over else "")
             + "._"
         )
+        if core_only:
+            meta = (
+                f"_Start hook: {total:,} chars in {len(parts)} part(s). This is the core only; your track's "
+                f"load, and the total against the {target:,}-char budget, are printed by the `--track` command._"
+            )
         write_cache(key, parts, meta)
     else:
         data = wait_for_cache(key, started, float(pcfg.get("part_wait_seconds", 45)))
@@ -394,7 +436,7 @@ def remote_state(proj: str) -> tuple[int, int, bool, bool]:
     no tracking ref used to report "current" — the rev-list failed, both counts
     defaulted to 0, and the guard whose whole purpose is "a stale checkout looks
     complete, not broken" printed a green tick it had not earned."""
-    if MEASURE:
+    if MEASURE or TRACK:
         return 0, 0, False, True
     fetch_rc, _ = run(["git", "fetch", "origin", "--prune"], proj, timeout=20)
     rc, counts = run(["git", "rev-list", "--left-right", "--count", "HEAD...@{u}"], proj)
@@ -476,6 +518,49 @@ def item_tag(first_line: str, aliases: dict[str, str]) -> str | None:
     return "all" if hit == "all" else aliases.get(hit)
 
 
+def tag_targets(first_line: str, aliases: dict[str, str]) -> set[str] | None:
+    """Who a tagged item is FOR, when the answer decides whether a session sees
+    it at all (load by track). None = no tag (the writer's track acts on it).
+
+    Grouping can afford to misread a tag — the item lands under the wrong
+    heading and is still on the page. Scoping cannot: a misread tag hides the
+    item from the track it was written for. So this reads more forgivingly
+    than `item_tag` and fails OPEN: a tag it cannot resolve to declared tracks
+    (`→both`, `→backend`), or cannot fully read, means every track
+    ("all"). It also finds a tag after a provenance parenthetical that itself
+    contains parentheses, and takes `→android/ios` as both."""
+    s = first_line.lstrip()
+    head = re.match(r"- \[.\] [A-Za-z]{1,4}-\d+\s*", s)
+    if not head:
+        return None
+    rest = s[head.end():]
+    if not re.match(r"(?:→|->)", rest):
+        if not rest.startswith("("):
+            return None
+        close = _matching_paren(rest, 0)
+        if close < 0:
+            return None
+        rest = rest[close + 1:].lstrip()
+        if not re.match(r"(?:→|->)", rest):
+            return None
+    rest = re.sub(r"^(?:→|->)\s*", "", rest)
+    # Longest alias first, so a multi-word alias ("steam deck") is one name.
+    names = sorted(list(aliases.items()) + [("all", "all")], key=lambda kv: -len(kv[0]))
+    targets: set[str] = set()
+    while True:
+        hit = next(
+            ((a, n) for a, n in names if re.match(re.escape(a) + r"(?![\w-])", rest, re.IGNORECASE)), None
+        )
+        if hit is None:
+            return {"all"}
+        targets.add(hit[1])
+        rest = rest[len(hit[0]):]
+        more = re.match(r"\s*(?:[/,+&]|and\b)\s*(?:→|->)?\s*", rest)
+        if not more:
+            return targets
+        rest = rest[more.end():]
+
+
 def truncate(block_text: str, cap: int) -> tuple[str, bool]:
     if len(block_text) <= cap:
         return block_text, False
@@ -535,15 +620,24 @@ def item_title(block: list[str], cap: int) -> str:
     no bold; and only the title is cut to `cap`, at a word boundary. A line
     that is not a dated item falls back to the old behaviour."""
     s = re.sub(r"\s+", " ", block[0].lstrip()).strip()
+    parts = _title_parts(s)
+    if parts is None:
+        return "- " + _cut(_clean(s[6:] if s.startswith("- [") else s), cap)
+    item_id, tag, date, title = parts
+    return f"- {item_id}{' →' + tag if tag else ''} ({date}) {_cut(_clean(title), cap)}"
+
+
+def _title_parts(s: str) -> tuple[str, str | None, str, str] | None:
+    """(ID, tag, date, raw title) of a dated item's first line, or None when the
+    line is not one (no ID, no date, or an unclosed provenance parenthetical)."""
     m = ITEM_RE.match(s)
     if not m:
-        return "- " + _cut(_clean(s[6:] if s.startswith("- [") else s), cap)
-    item_id = f"{m.group(2)}-{m.group(3)}"
+        return None
     date = m.group(4)
     paren_open = s.find("(" + date)
     paren_close = _matching_paren(s, paren_open) if paren_open >= 0 else -1
     if paren_close < 0:
-        return "- " + _cut(_clean(s[6:]), cap)
+        return None
     tag_m = TAG_RE.search(s[m.end(3):paren_open])
     tag = tag_m.group(1) if tag_m else None
     tail = s[paren_close + 1:].strip()
@@ -552,8 +646,20 @@ def item_title(block: list[str], cap: int) -> str:
         tag = tag or t2.group(1)
         tail = tail[t2.end():]
     b = BOLD_RE.match(tail)
-    title = b.group(1) if b else tail
-    return f"- {item_id}{' →' + tag if tag else ''} ({date}) {_cut(_clean(title), cap)}"
+    return f"{m.group(2)}-{m.group(3)}", tag, date, (b.group(1) if b else tail)
+
+
+DECIDE_KEY = "YOUR CALLS — waiting on the user's ruling (title starts DECIDE:)"
+
+
+def is_decide(block: list[str]) -> bool:
+    """An item whose title starts `DECIDE:` is waiting on the user, not on a
+    session. The manifest lists those first, under their own heading, so the
+    start report can put them in front of the one person who can close them:
+    on one project about twenty of 123 open items were waiting on a ruling and
+    nothing distinguished them from work."""
+    parts = _title_parts(re.sub(r"\s+", " ", block[0].lstrip()).strip())
+    return bool(parts and _clean(parts[3]).upper().startswith("DECIDE:"))
 
 
 def gating_ids(state_text: str, cfg: dict, per_section: int) -> dict[str, str]:
@@ -585,12 +691,19 @@ def gating_ids(state_text: str, cfg: dict, per_section: int) -> dict[str, str]:
     return out
 
 
-def open_ledger_view(text: str, cfg: dict, version: int = 1, gating: dict[str, str] | None = None) -> dict:
+def open_ledger_view(text: str, cfg: dict, version: int = 1, gating: dict[str, str] | None = None,
+                     track: str | None = None) -> dict:
     """v1 injects every open item's text, truncated per item. v2 injects a
     complete one-line manifest plus the (capped) full text of the items the
     NEXT ACTION sections cite — rank for depth, never for presence. An item
     dropped from the manifest would be an absence, and absences produce no
-    signal."""
+    signal.
+
+    With `track` (load by track), the view holds the items that session acts
+    on: tagged for the track, tagged →all, untagged and written by it, or
+    unassigned. Items for other tracks are counted in `hidden`, never shown —
+    they are present in THEIR track's view, so the presence rule holds across
+    the views taken together (check-payload-budget.py proves that)."""
     gating = gating or {}
     header, blocks = ledger_blocks(text)
     pcfg = cfg.get("payload") or {}
@@ -610,10 +723,23 @@ def open_ledger_view(text: str, cfg: dict, version: int = 1, gating: dict[str, s
     stale: list[str] = []
     truncated = 0
     expanded: list[str] = []
+    hidden = 0
+    shown_ids: list[str] = []
     for b in open_blocks:
         first = b[0]
         m = ITEM_RE.match(first.lstrip())
         item_id = f"{m.group(2)}-{m.group(3)}" if m else "?"
+        writer = tag = None
+        if multi_track(cfg):
+            writer = pmap.get(m.group(2).upper()) if m else None
+            tag = item_tag(first, aliases)
+            if track:
+                targets = tag_targets(first, aliases)
+                route = targets if targets is not None else ({writer} if writer else {"all"})
+                if "all" not in route and track not in route:
+                    hidden += 1
+                    continue
+        shown_ids.append(item_id)
         if m:
             try:
                 d = _dt.date.fromisoformat(m.group(4))
@@ -632,8 +758,6 @@ def open_ledger_view(text: str, cfg: dict, version: int = 1, gating: dict[str, s
             text_block, was_cut = truncate("\n".join(b), cap)
         truncated += int(was_cut)
         if multi_track(cfg):
-            writer = pmap.get(m.group(2).upper()) if m else None
-            tag = item_tag(first, aliases)
             if tag == "all":
                 key = "SHARED (→all)"
             elif tag:
@@ -647,6 +771,8 @@ def open_ledger_view(text: str, cfg: dict, version: int = 1, gating: dict[str, s
                 text_block = head_line + f"   ⟵ from {writer}, for {tag}" + ("\n" + rest if rest else "")
         else:
             key = "OPEN"
+        if version >= 2 and is_decide(b):
+            key = DECIDE_KEY
         if key not in groups:
             groups[key] = []
             order.append(key)
@@ -656,6 +782,8 @@ def open_ledger_view(text: str, cfg: dict, version: int = 1, gating: dict[str, s
     if multi_track(cfg):
         wanted = [n.upper() for n in names] + ["SHARED (→all)", "UNASSIGNED (legacy L-* / no tag)"]
         order = [k for k in wanted if k in groups] + [k for k in order if k not in wanted]
+    if DECIDE_KEY in order:
+        order = [DECIDE_KEY] + [k for k in order if k != DECIDE_KEY]
 
     # v1 injected the ledger's whole header block — 3,071 chars of authoring
     # rules on the live project — at every session start. Those rules are
@@ -666,6 +794,10 @@ def open_ledger_view(text: str, cfg: dict, version: int = 1, gating: dict[str, s
         parts.append(f"\n#### {key} — {len(groups[key])} open\n" + "\n".join(groups[key]))
     return {
         "text": "\n".join(parts),
+        "shown": len(open_blocks) - hidden,
+        "hidden": hidden,
+        "ids": shown_ids,
+        "decide": len(groups.get(DECIDE_KEY, [])),
         "open": len(open_blocks),
         "closed": closed,
         "truncated": truncated,
@@ -761,11 +893,19 @@ def slim_text(cfg: dict) -> str:
             "only, never stage another track's files, never `git add -A`; another track's uncommitted files in "
             "the tree are theirs.\n"
         )
-    out.append(
-        "- If the summary does not state your NEXT ACTION and its open gates, re-read your track's NEXT ACTION "
-        "section of `docs/CURRENT_STATE.md` and grep your ID prefix in `docs/SESSION_LEDGER.md` before "
-        "continuing. Do not work from memory of a payload you no longer have.\n"
-    )
+    if protocol_version(cfg) >= 2 and multi_track(cfg):
+        out.append(
+            "- If the summary does not state your NEXT ACTION and its open gates, reload your track before "
+            "continuing: `python .claude/scripts/session-start-context.py --track <your track>` (one command: "
+            "NEXT ACTION, shared state, your open ledger items, your handoff entry). Do not work from memory "
+            "of a payload you no longer have.\n"
+        )
+    else:
+        out.append(
+            "- If the summary does not state your NEXT ACTION and its open gates, re-read your track's NEXT ACTION "
+            "section of `docs/CURRENT_STATE.md` and grep your ID prefix in `docs/SESSION_LEDGER.md` before "
+            "continuing. Do not work from memory of a payload you no longer have.\n"
+        )
     out.append(
         "- Ledger moment-of-event rule still applies: queue and strike items as they arise or resolve. "
         "`/end` still closes the session, and the index gate is not optional.\n"
@@ -780,7 +920,9 @@ def slim_text(cfg: dict) -> str:
 
 def main() -> None:
     started = time.time()
-    proj = project_dir()
+    # Hooks get CLAUDE_PROJECT_DIR. Run by hand or by the model (`--track`), the
+    # project is the one this script sits in.
+    proj = project_dir() or str(pathlib.Path(__file__).resolve().parent.parent.parent)
     if not proj or not pathlib.Path(proj).is_dir():
         sys.exit(0)
     cfg, cfg_exists = load_config(proj)
@@ -797,7 +939,10 @@ def main() -> None:
     rc, branch = run(["git", "rev-parse", "--abbrev-ref", "HEAD"], proj)
     protected = [str(b).strip().lower() for b in cfg.get("protected_branches") or []]
     on_protected = rc == 0 and branch.lower() in protected
-    if ".claude/worktrees/" in cwd_norm or (rc == 0 and branch.startswith("claude/")) or on_protected:
+    # (`--track` runs after the hook has already made this check and the sync
+    # check below; it loads documents and decides nothing.)
+    tripped = ".claude/worktrees/" in cwd_norm or (rc == 0 and branch.startswith("claude/")) or on_protected
+    if tripped and TRACK is None:
         why = (
             f"`{branch}` is listed in `protocol.json` → `protected_branches` and must never receive commits"
             if on_protected
@@ -860,13 +1005,21 @@ def main() -> None:
             "compares the docs against EACH OTHER.\n\n"
             f"**Incoming commits:**\n```\n{incoming or '(unavailable)'}\n```\n\n"
             f"**Resolution:** {resolution}\n\n"
-            "Then give the normal status plus a sync line naming the pulled commit count. Never report "
+            + (
+                "Once the checkout is current, this repo loads by track: establish the track (the user's first "
+                "message, or ask) and run `python .claude/scripts/session-start-context.py --track <name>` "
+                "rather than reading the state docs whole.\n\n"
+                if protocol_version(cfg) >= 2 and multi_track(cfg) else ""
+            )
+            + "Then give the normal status plus a sync line naming the pulled commit count. Never report "
             "state read from a checkout you have not confirmed is current."
         ], proj, cfg, hook, started)
 
     # 4. Happy path — build the sections. Each section is one string; the
     # packer never splits inside one unless it is longer than a whole part.
     version = FORCE_VERSION or protocol_version(cfg)
+    # Load by track (module doc, 7): the hook delivers the core, `--track` the rest.
+    scoped = version >= 2 and multi_track(cfg)
     notes: list[str] = [global_note, cfg_note]
     notes.append(
         "✅ Fetched origin — checkout is current.\n"
@@ -969,6 +1122,18 @@ def main() -> None:
             "and WAIT — do not read, edit, or report until you know. Everything in this context is scoped to "
             "YOUR track: your NEXT ACTION section, your ledger prefix, your last handoff entry, your owned paths.\n"
         )
+        if scoped:
+            gate += (
+                "0b. **LOAD YOUR TRACK (mandatory — one command, as soon as the track is known, before any "
+                "other read or edit):** `python .claude/scripts/session-start-context.py --track <name>`. It "
+                "prints your track's NEXT ACTION, the shared state, the open ledger items your track acts on "
+                "(the ones waiting on the user's ruling first), the status spine and the handoff entry you are "
+                "accepting. **None of that is in this context** — the hook does not inject every track's state "
+                "into every session — so the cross-check below cannot be done without it. If the output ends "
+                "with a PAGE line, run the command it names as well. Do not read the state docs whole instead: "
+                "that is the payload this replaced. In the report, list the items waiting on the user's ruling "
+                "as **Your calls**, and take the payload size line from the top of that output.\n"
+            )
         crosscheck = (
             "1. **CROSS-CHECK (mandatory).** Does YOUR track's NEXT ACTION in CURRENT_STATE agree with the "
             "spine's CURRENT marker for your track, with your track's last HANDOFF entry's 'Next:', and with "
@@ -977,7 +1142,8 @@ def main() -> None:
             "2. If they agree, report: **Track:** <name> / where we are (name + number from the spine) / what "
             "your track's last session did / your single NEXT ACTION / open ledger items (yours + →all + "
             "unassigned, with gates) / a **sync line** stating currency explicitly / the payload size line "
-            "from part 1.\n"
+            + ("from the top of the `--track` output.\n" if scoped else "from part 1.\n")
+            +
             "3. Standing rules for this session: edit only your owned paths and the shared paths; never "
             "touch the other track's owned paths or its ledger lines; stage explicit paths (never `git add "
             "-A`); the other track's uncommitted files in the tree are THEIRS — leave them and say so at "
@@ -998,18 +1164,199 @@ def main() -> None:
         )
     directive = (
         "\n### Action requested — session start (the directive)\n"
-        "The hook fetched origin and auto-loaded the state docs into this context (closed ledger lines are "
-        "omitted by design — never read them at start). Now:\n"
+        + (
+            "The hook fetched origin. This repo loads by track: this context carries the sync result, the "
+            "track list and this directive, and NO track's state (closed ledger lines are never loaded at "
+            "start). Now:\n"
+            if scoped else
+            "The hook fetched origin and auto-loaded the state docs into this context (closed ledger lines are "
+            "omitted by design — never read them at start). Now:\n"
+        )
         + gate
         + crosscheck
         + audit_line
         + "During the session, follow the ledger's moment-of-event rule: queue and strike items THE MOMENT "
         "they arise or resolve — never wait for /end. Trust but verify: CURRENT_STATE is hand-written and CAN "
         "be stale; the spine wins on any status disagreement. Numbers are frozen (never renumber). Don't "
-        "re-read the docs injected here; don't run `/start` (this hook covered it). Run git status/log only "
+        + (
+            "re-read what the `--track` command printed; don't run `/start` (this hook and that command cover "
+            "it). "
+            if scoped else
+            "re-read the docs injected here; don't run `/start` (this hook covered it). "
+        )
+        + "Run git status/log only "
         "if the user asks or the cross-check needs it.\n"
     )
 
+    core = ["".join(notes), directive]
+    if scoped:
+        core.append(track_index(proj, cfg))
+    if TRACK is not None:
+        emit_track(core, proj, cfg, version, scoped, hook, started)
+    if scoped:
+        # Load by track: the hook delivers the core only. Each session loads
+        # its own track with `--track` once the track is known.
+        deliver(core, proj, cfg, hook, started, core_only=True)
+    deliver(core + build_docs(proj, cfg, version), proj, cfg, hook, started)
+
+
+def resolve_track(cfg: dict, said: str) -> str | None:
+    """A declared track name from what was typed: the name or one of its aliases."""
+    return track_aliases(cfg).get(said.strip().lower())
+
+
+def scope_state(text: str, cfg: dict, track: str) -> tuple[str, list[str], bool]:
+    """CURRENT_STATE for one track: everything except the OTHER tracks' NEXT
+    ACTION sections. Returns (text, names of the tracks whose section was left
+    out, whether this track's own section was found).
+
+    A section runs from a `# ` or `## ` heading to the next one. A NEXT ACTION
+    heading belongs to a track only when the track's name or an alias is its
+    LABEL — the first words after "NEXT ACTION" (`## 📍 NEXT ACTION — desktop`).
+    A track word further along does not count: "NEXT ACTION — all tracks: fix
+    the site copy" is shared, although "site" is an alias. Everything that is
+    not clearly another track's section stays: the failure this must never
+    have is hiding a section from the session that needed it. Headings inside
+    a fenced block or an HTML comment are not headings (the template's own
+    multi-track example sits in a comment)."""
+    # Longest alias first, so "steam deck" wins over "deck".
+    aliases = sorted(track_aliases(cfg).items(), key=lambda kv: -len(kv[0]))
+    out: list[str] = []
+    omitted: list[str] = []
+    found = False
+    keep = True
+    fenced = comment = False
+    for ln in text.splitlines():
+        s = ln.strip()
+        if s.startswith("```") or s.startswith("~~~"):
+            fenced = not fenced
+        elif not fenced:
+            if comment:
+                comment = "-->" not in s
+            else:
+                if ln.startswith("## ") or ln.startswith("# "):
+                    keep = True
+                    low = ln.lower()
+                    if ln.startswith("## ") and "next action" in low:
+                        label = re.sub(r"^[^a-z0-9]+", "", low.split("next action", 1)[1])
+                        owner = next(
+                            (n for a, n in aliases if re.match(re.escape(a) + r"(?![\w-])", label)), None
+                        )
+                        if owner == track:
+                            found = True
+                        elif owner is not None:
+                            keep = False
+                            if owner not in omitted:
+                                omitted.append(owner)
+                if "<!--" in s and "-->" not in s[s.rindex("<!--"):]:
+                    comment = True
+        if keep:
+            out.append(ln)
+    return "\n".join(out), omitted, found
+
+
+def track_handoff(entries: list[list[str]], cfg: dict, name: str) -> tuple[list[str] | None, bool]:
+    """(the newest handoff entry for a track, whether it was matched by text).
+
+    Entries carry the track as their second `|` field. Legacy lines (before
+    that field existed) name the track in free text, e.g. "(120th, desktop)" or
+    "Android (86th)": match the track name or any declared alias so the first
+    post-migration cross-check has something to check against. Only the AREA
+    field counts, and only where the name is used as a label — followed by "(",
+    ",", ";", ")", "track", or the end — so "(120th, desktop; Android session
+    concurrent)" matches desktop, not mobile."""
+    for e in reversed(entries):
+        fields = [f.strip() for f in e[0].split("|")]
+        if len(fields) >= 3 and fields[1].lower() == name.lower():
+            return e, False
+    words = [a for a, n in track_aliases(cfg).items() if n == name]
+    pat = (
+        r"(?:^|[\s(,;/])(?:" + "|".join(re.escape(w) for w in words)
+        + r")(?=\s*(?:\(|,|;|\)|track\b|$))"
+    )
+    for e in reversed(entries):
+        fields = [f.strip() for f in e[0].split("|")]
+        area = fields[1] if len(fields) >= 3 else e[0]
+        if re.search(pat, area, re.IGNORECASE):
+            return e, True
+    return None, False
+
+
+def _handoff_entries(proj: str) -> list[list[str]]:
+    try:
+        return handoff_entries((pathlib.Path(proj) / "docs" / "HANDOFF_LOG.md").read_text(encoding="utf-8"))
+    except OSError:
+        return []
+
+
+def track_index(proj: str, cfg: dict) -> str:
+    """One line per track for the core: enough to pick a track from, and proof
+    at a glance of which tracks have moved since."""
+    entries = _handoff_entries(proj)
+    rows = []
+    for name in track_names(cfg):
+        last, _ = track_handoff(entries, cfg, name)
+        title = _cut(re.sub(r"\s+", " ", last[0].lstrip("# ").strip()), 150) if last else "(no handoff entry yet)"
+        rows.append(f"- **{name}** — last handoff: {title}")
+    return (
+        "\n### Tracks — where each one last stopped (titles only)\n"
+        + "\n".join(rows)
+        + "\nNo track's state is in this context. Your track's NEXT ACTION, ledger items and handoff entry "
+        "arrive from the `--track` command in the directive.\n"
+    )
+
+
+def emit_track(core: list[str], proj: str, cfg: dict, version: int, scoped: bool,
+               hook: dict, started: float) -> None:
+    """`--track NAME`: what a session on that track loads. Never returns."""
+    name = resolve_track(cfg, TRACK or "") if scoped else None
+    if scoped and name is None:
+        if not MEASURE:
+            sys.stdout.write(
+                f"Unknown track `{TRACK}`. Declared in .claude/protocol.json: "
+                + ", ".join(track_names(cfg)) + ". Ask the user which one this session is on.\n"
+            )
+        sys.exit(1)
+    docs = build_docs(proj, cfg, version, name)
+    if MEASURE:
+        deliver(core + docs, proj, cfg, hook, started, hook_sections=core if scoped else None)
+    pcfg = cfg.get("payload") or {}
+    target = int(pcfg.get("target_chars", 25000))
+    limit = payload_limit(cfg, name or "project")
+    hook_chars = sum(len(s) for s in core)
+    doc_chars = sum(len(s) for s in docs)
+    total = hook_chars + doc_chars
+    pct = round(total / max(target, 1) * 100)
+    if total > limit:
+        verdict = f" 🚨 OVER its limit of {limit:,} — `/end` will stop at the budget gate until it is shrunk"
+    elif total > target:
+        verdict = f" ⚠️ over budget, inside this project's ceiling of {limit:,} (which only moves down)"
+    else:
+        verdict = ""
+    # Clamped: a page has to fit one tool result (30,000 chars) with its header.
+    pages = pack(docs, min(max(int(pcfg.get("page_chars", 24000)), 4000), 28000))
+    page = min(PAGE, max(len(pages), 1))
+    head = (
+        f"## Session context — {'track ' + name if name else 'this project'} (loaded with --track)\n"
+        f"_Payload: {total:,} chars (the start hook {hook_chars:,} + this {doc_chars:,}) — {pct}% of the "
+        f"{target:,}-char budget{verdict}._\n"
+    )
+    foot = ""
+    if len(pages) > 1:
+        head += f"_Page {page} of {len(pages)}._\n"
+        if page < len(pages):
+            foot = (
+                f"\n---\n**PAGE {page} OF {len(pages)} — this is not all of it.** Run now, before the "
+                f"cross-check: `python .claude/scripts/session-start-context.py --track {name or TRACK} "
+                f"--page {page + 1}`\n"
+            )
+    sys.stdout.write(head + (pages[page - 1] if pages else "(no state docs found)\n") + foot)
+    sys.exit(0)
+
+
+def build_docs(proj: str, cfg: dict, version: int, track: str | None = None) -> list[str]:
+    """The state documents as payload sections. With `track`, scoped to it."""
+    state_path = pathlib.Path(proj) / "docs" / "CURRENT_STATE.md"
     docs: list[str] = []
 
     # CURRENT_STATE.
@@ -1019,7 +1366,17 @@ def main() -> None:
             state_text = state_path.read_text(encoding="utf-8")
         except OSError:
             state_text = ""
-    if state_text:
+    if state_text and track:
+        state_text, omitted, found = scope_state(state_text, cfg, track)
+        scope_note = (
+            (f"_NEXT ACTION sections of other tracks are not shown here ({', '.join(omitted)}); they are in "
+             "the file._\n" if omitted else "")
+            + ("" if found else
+               f"⚠️ **No `## … NEXT ACTION — {track}` section found in this file.** Say so in the status "
+               "report: this track has no recorded next action.\n")
+        )
+        docs.append(f"\n### docs/CURRENT_STATE.md — for track {track}\n" + scope_note + state_text.rstrip() + "\n")
+    elif state_text:
         docs.append("\n### docs/CURRENT_STATE.md\n" + state_text.rstrip() + "\n")
 
     # Ledger — v1: every open item's text, truncated. v2: a complete manifest
@@ -1032,7 +1389,12 @@ def main() -> None:
                 gating_ids(state_text, cfg, int(pcfg.get("max_gating_items", 4)))
                 if version >= 2 else {}
             )
-            ledger_info = open_ledger_view(ledger_path.read_text(encoding="utf-8"), cfg, version, gate_ids)
+            ledger_info = open_ledger_view(
+                ledger_path.read_text(encoding="utf-8"), cfg, version, gate_ids, track
+            )
+            if track:
+                # The soft target and the count are this session's view.
+                ledger_info["open"] = ledger_info["shown"]
             cap = cfg["ledger"]["item_max_chars"]
             soft = cfg["ledger"]["open_soft_max"]
             extras = []
@@ -1054,10 +1416,21 @@ def main() -> None:
                 )
             if version >= 2:
                 exp = ledger_info["expanded"]
+                scope = (
+                    f"MANIFEST of the {ledger_info['shown']} open items track {track} acts on "
+                    f"({ledger_info['hidden']} for other tracks not shown; "
+                    if track else f"MANIFEST of all {ledger_info['open']} open items ("
+                )
+                calls = (
+                    f"**{ledger_info['decide']} item(s) wait on the user's ruling — they are listed first; "
+                    "name them in the status report.** "
+                    if ledger_info["decide"] else ""
+                )
                 head = (
-                    f"\n### docs/SESSION_LEDGER.md — MANIFEST of all {ledger_info['open']} open items "
-                    f"({ledger_info['closed']} closed omitted — history)\n"
-                    "Each line is `ID →tag (date) TITLE` — the item's title, not the item; its provenance "
+                    f"\n### docs/SESSION_LEDGER.md — {scope}"
+                    f"{ledger_info['closed']} closed omitted — history)\n"
+                    + calls
+                    + "Each line is `ID →tag (date) TITLE` — the item's title, not the item; its provenance "
                     "parenthetical is dropped here. "
                     + (f"Full text is expanded in place for {', '.join(exp)} (cited by a NEXT ACTION section). "
                        if exp else "No item is expanded — no NEXT ACTION cites one. ")
@@ -1114,36 +1487,18 @@ def main() -> None:
                 elif not multi_track(cfg):
                     docs.append("\n### docs/HANDOFF_LOG.md — last entry (the handoff you are accepting)\n"
                                 + "\n".join(entries[-1]) + "\n")
-                if multi_track(cfg):
+                if track:
+                    last, legacy = track_handoff(entries, cfg, track)
+                    note = "   ⟵ matched by text (legacy line, no track field)" if legacy else ""
+                    docs.append(
+                        f"\n### docs/HANDOFF_LOG.md — newest entry for track {track} (the handoff you are "
+                        f"accepting){note}\n"
+                        + ("\n".join(last) if last else "(no handoff entry yet for this track)") + "\n"
+                    )
+                elif multi_track(cfg):
                     per: list[str] = []
                     for name in track_names(cfg):
-                        last: list[str] | None = None
-                        legacy = False
-                        for e in reversed(entries):
-                            fields = [f.strip() for f in e[0].split("|")]
-                            if len(fields) >= 3 and fields[1].lower() == name.lower():
-                                last = e
-                                break
-                        if last is None:
-                            # Legacy lines (before the track field existed) name the track in
-                            # free text, e.g. "(120th, desktop)" or "Android (86th)". Match the
-                            # track name or any declared alias so the first post-migration
-                            # cross-check has something to check against.
-                            # Only the AREA field counts, and only where the name is used as a
-                            # label — followed by "(", ",", ";", ")", "track", or the end —
-                            # so "(120th, desktop; Android session concurrent)" matches desktop,
-                            # not mobile.
-                            words = [a for a, n in track_aliases(cfg).items() if n == name]
-                            pat = (
-                                r"(?:^|[\s(,;/])(?:" + "|".join(re.escape(w) for w in words)
-                                + r")(?=\s*(?:\(|,|;|\)|track\b|$))"
-                            )
-                            for e in reversed(entries):
-                                fields = [f.strip() for f in e[0].split("|")]
-                                area = fields[1] if len(fields) >= 3 else e[0]
-                                if re.search(pat, area, re.IGNORECASE):
-                                    last, legacy = e, True
-                                    break
+                        last, legacy = track_handoff(entries, cfg, name)
                         note = "   ⟵ matched by text (legacy line, no track field)" if legacy else ""
                         if last is None:
                             per.append(f"- **{name}:** (no handoff {'entry' if version >= 2 else 'line'} yet for this track)")
@@ -1160,7 +1515,7 @@ def main() -> None:
         except OSError:
             pass
 
-    deliver(["".join(notes), directive] + docs, proj, cfg, hook, started)
+    return docs
 
 
 if __name__ == "__main__":

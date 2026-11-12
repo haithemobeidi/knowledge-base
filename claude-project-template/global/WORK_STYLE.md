@@ -47,7 +47,7 @@ A product owner and idea person, not a programmer. They decide product, UX, scop
 
 | Rule | One line | Detail section |
 |---|---|---|
-| **Flag transferable lessons `*kbdoc`** | When work produces a lesson that would be true in a different app, say so in chat immediately with the marker and a one-liner. Articles are written after `/end` when the user asks, in the Knowledge Base repo — `git pull --ff-only` it FIRST (the clone is stale by default), check for an existing article to extend before writing a new one. Dead ends count. | Knowledge Base |
+| **Flag transferable lessons `*kbdoc`** | When work produces a lesson that would be true in a different app, say so in chat immediately with the marker and a one-liner; unwritten ones wait in the project's `docs/LESSONS_QUEUE.md`, never on the ledger. Articles are written after `/end` when the user asks, in the Knowledge Base repo — `git pull --ff-only` it FIRST (the clone is stale by default), check for an existing article to extend before writing a new one. Dead ends count. | Knowledge Base |
 | **Memory is how-we-work, not app status** | Harness memory holds preferences, corrections, and durable decisions — never what is built or which phase we are on. Verify build state from the code and CURRENT_STATE, not from a label. | Memory scope |
 | **Narrative docs at `/end`, the ledger at the moment** | See the global protocol. | — |
 

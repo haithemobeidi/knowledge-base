@@ -181,6 +181,24 @@ The fix keeps the budget and changes the delivery. Each string is measured on it
 
 Two smaller findings from the same audit landed with it: the manifest line is now `ID →tag (date) TITLE` (cutting the raw first line at 110 chars landed inside the provenance parenthetical on 44 of 89 items), and gating is taken per NEXT ACTION section (taken across the document, all five expansions went to the first track).
 
+### Found after shipping: nothing enforced it, and every session carried every track (2026-11-12)
+
+Three weeks after the delivery fix, the live five-track project's payload was 76,787 characters — 307% of the budget — in 10 parts of 10 wired. Read from its session logs and history:
+
+- **The budget was a report.** Every wrap printed "over budget". The payload went 53,000 → 63,000 → 77,000. When it needed a 9th part the wrap hand-trimmed one document at 5am until it fit in 8; within days the wiring was raised to 9, then 10. "Never raise the budget" held on paper while the deliverable ceiling was raised twice.
+- **The payload had no notion of who was reading.** A marketing session loaded the desktop, Android, iOS and Steam tracks' next actions (11,900 characters of five), all five newest handoff entries (13,800) and a manifest of all 123 open items (30,300), of which 22 were tagged for it.
+- **The ledger's mint rate beat its close rate.** 11 to 22 new IDs a week against "the two oldest stale items per wrap"; the count had not been under 76 since early September against a soft target of 30. Eleven open items were lesson write-up reminders that `/end` Step 1f itself told the session to put there; about twenty were waiting on the user's ruling and looked like work.
+
+The fix, and why each part is shaped the way it is:
+
+- **Load by track.** The hook cannot know the track (it is in the user's first message), so it injects only the core — about 5,000 characters, one part — and the session runs `session-start-context.py --track <name>` once the track is known. The output is not a hook string, so the 10,000 cap does not apply; it is paged at 24,000 so one tool result carries a whole page. This is a second step that depends on the model, which the 2026-10-19 finding warns about ("7 of 38 read the file") — the difference is that there the model was handed a preview with no instruction, and here the directive requires the command and the cross-check cannot be done without its output. Rejected: guessing the track from the first prompt in a `UserPromptSubmit` hook (aliases like "site", "deck" and "posts" are ordinary words, and a wrong guess loads the wrong track silently).
+- **Presence is proved, not assumed.** A scoped view can hide an item from everyone. The budget check reads the ledger's open IDs independently and fails when one is loaded by no track.
+- **A gate with a ratchet.** A hard gate at the budget would have locked a 300%-over project out of wrapping on day one, and the response to that is always to remove the gate. So an over-budget payload gets a ceiling at its size on the day of adoption, 500 to 1,000 characters above it, and the ceiling only moves down. Adoption is recorded by the presence of the `ceiling_chars` key, which is what makes `--init-ceiling` a one-time act rather than a way past the gate.
+- **The gate is the net-zero rule.** A separate cap on the open-item count would be a second number to keep honest; a ledger title costs about 250 characters of the payload, so the ceiling already limits it.
+- **Lessons and rulings are sorted by kind, not by a new ID scheme.** Lessons leave the ledger for a file that is never loaded. Pending rulings stay on the ledger — they are open loops — but carry `DECIDE:` in the title, which costs nothing to adopt and lets the start report put them in front of the one person who can close them.
+
+Measured on a copy of the live project's documents: 76,787 → 34,500–43,100 per track at adoption (the remainder is 15,000 characters of shared state every track loads and 42 items tagged `→all`, which is a triage sitting, not a script), single-track and v1 payloads byte-identical to before.
+
 ### The four documents
 
 Same four as v1. Each does exactly one job.

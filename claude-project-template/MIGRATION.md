@@ -114,6 +114,37 @@ Then in `.claude/protocol.json` (project-owned, not synced):
 
 Verify in a fresh session: the context arrives as "part n of m" strings, part 1 carries the directive and a `Payload: N chars in M part(s)` line, and `/compact` is followed by the slim rules reminder.
 
+## 6d — Load by track, the budget gate, the lessons queue (template 2026-11-12)
+
+For any project already on the template. **Nothing in the project's documents has to change**, there is no version to flip, and the sync does the adoption itself. Run it in the project, in its own session, with no other session open in the checkout:
+
+```bash
+git -C "<KB>" pull --ff-only && python "<KB>/claude-project-template/install-global.py"   # /start and /end
+python .claude/scripts/check-template-drift.py --sync      # after the user agrees
+python .claude/scripts/check-template-drift.py --adopt     # this ONE time only: the copy that did the sync predates adoption
+```
+
+`--adopt` (which later syncs run by themselves) adds `docs/LESSONS_QUEUE.md` if the project has none, and — once per project — records the budget gate in `protocol.json`: a payload already over the budget gets a ceiling at today's size, a project inside it gets an empty `payload.ceiling_chars`. It prints anything left for a person as the exact command. Usually that is one line:
+
+```bash
+python .claude/scripts/ledger-archive.py --lessons           # dry run: the open `kbdoc:` items
+python .claude/scripts/ledger-archive.py --lessons --apply   # whole text → the queue; a struck stub keeps each ID
+```
+
+Then commit `.claude/`, `docs/LESSONS_QUEUE.md` and (if lessons moved) `docs/SESSION_LEDGER.md`.
+
+What changes, by project shape:
+
+| Project | After the sync |
+|---|---|
+| Single track, v1 or v2 | The start payload is byte-for-byte what it was. `/end` Step 3b is now a gate; a project inside the budget never notices. |
+| Two or more tracks, v2 | The hook injects one small part (sync result, track list, directive). Each session runs `session-start-context.py --track <name>` and loads its own track. `settings.json` goes back to the template's 8 `--part` entries — a project that raised it by hand no longer needs to. |
+| Two or more tracks, v1 | Unchanged until it migrates to v2 (§6b). |
+
+Verify in a fresh session on a multi-track project: the hook context says "This repo loads by track", the session runs the `--track` command after the track is named, and the first line of that output states the payload against the budget. `python .claude/scripts/check-payload-budget.py` prints one line per track.
+
+**Getting an over-budget project under the budget is a separate sitting, and it is the user's.** The ceiling stops growth; it does not shrink anything. `check-payload-budget.py --all` shows what each track loads. The usual three, largest first: (1) what sits in CURRENT_STATE outside the NEXT ACTION sections is paid for by every track — move standing reference facts to a doc that is read on demand; (2) items tagged `→all` are in every track's payload — retag for the tracks that act; (3) items that are really ideas, facts or pending rulings — route them, or retitle `DECIDE:` and take the list to the user as one table.
+
 ## 7 — Commit
 
 Single track: `Session: protocol migrated to the global layer`. Multi-track: `Session (<track>): …`. Push per `push_policy`. Record the migration in `DECISIONS.md` (one entry: what moved where, the caps chosen, the tracks declared).

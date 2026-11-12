@@ -66,6 +66,116 @@ def tracked_dirty(proj: pathlib.Path, rel: str) -> bool:
     return bool(out.strip())
 
 
+QUEUE_HEADER = """# Lessons queue — transferable lessons waiting to be written up
+
+Lessons flagged `*kbdoc` that have not been written into the Knowledge Base yet.
+One entry per lesson, appended at the moment it is flagged or at `/end` Step 1f;
+the first line says what the lesson is, anything worth keeping for the write-up
+goes on continuation lines. When the article is written, change `[ ]` to `[x]`
+and add `→ WRITTEN <date>: <article file>`.
+
+Never loaded at session start, so it costs nothing and may grow. Lessons do NOT
+take ledger IDs: the ledger is for open loops a session must act on, and a
+write-up the user asks for when they want it is not one.
+"""
+
+def lesson_id(line: str) -> str | None:
+    """The ID of an open item whose TITLE starts `kbdoc:`, else None.
+
+    The title is what follows the ID, an optional →tag, the provenance
+    parenthetical (which may itself contain parentheses) and an optional →tag —
+    with or without bold. `kbdoc:` anywhere later on the line is NOT a lesson
+    item: "**Real work.** Found the cause — kbdoc: worth a write-up" is a real
+    open loop that mentions a lesson, and moving it would hide it from every
+    session."""
+    m = re.match(r"- \[ \] ([A-Za-z]{1,4}-\d+)\s*(?:(?:→|->)\s*[\w-]+\s*)?", line)
+    if not m:
+        return None
+    rest = line[m.end():]
+    if rest.startswith("("):
+        depth = 0
+        for k, ch in enumerate(rest):
+            depth += ch == "("
+            depth -= ch == ")"
+            if depth == 0:
+                rest = rest[k + 1:]
+                break
+        else:
+            return None
+    rest = re.sub(r"^\s*(?:(?:→|->)\s*[\w-]+)?\s*(?:\*\*)?\s*", "", rest)
+    return m.group(1) if re.match(r"kbdoc\s*:", rest, re.IGNORECASE) else None
+
+
+def move_lessons(proj: pathlib.Path, ledger: pathlib.Path, apply: bool) -> None:
+    """`--lessons`: move open `kbdoc:` items out of the ledger into
+    `docs/LESSONS_QUEUE.md`. One-time, for a ledger written under the old /end
+    Step 1f, which turned every unwritten lesson into a ledger item (11 of 124
+    open items on one project). The item's whole text goes to the queue; a
+    struck one-line stub stays in the ledger so its ID still resolves."""
+    queue = proj / "docs" / "LESSONS_QUEUE.md"
+    today = _dt.date.today().isoformat()
+    lines = ledger.read_text(encoding="utf-8").split("\n")
+    out: list[str] = []
+    moved: list[tuple[str, list[str]]] = []
+    in_comment = fenced = False
+    i = 0
+    while i < len(lines):
+        ln = lines[i]
+        if ln.strip().startswith(("```", "~~~")):
+            fenced = not fenced
+        elif in_comment:
+            in_comment = "-->" not in ln
+        elif "<!--" in ln and "-->" not in ln[ln.rindex("<!--"):]:
+            in_comment = True
+        item_id = None if (in_comment or fenced) else lesson_id(ln)
+        if not item_id:
+            out.append(ln)
+            i += 1
+            continue
+        # The WHOLE item: its ID line and everything under it up to the next
+        # item or section heading at the start of a line — blank-separated
+        # paragraphs, indented `#` lines and nested checkboxes included, which
+        # is the same extent the start hook reads as one item.
+        j = i + 1
+        while j < len(lines) and not lines[j].startswith(("- [", "#", "<!--", "```", "~~~")):
+            j += 1
+        while j > i + 1 and not lines[j - 1].strip():
+            j -= 1  # trailing blank lines stay in the ledger as spacing
+        block = lines[i:j]
+        moved.append((item_id, block))
+        title = re.search(r"\*\*(.+?)\*\*", ln)
+        cut = ln.index(title.group(0)) + len(title.group(0)) if title else len(ln)
+        stub = ln[:cut].replace("- [ ]", "- [-]", 1)
+        out.append(f"{stub} → MOVED {today} to docs/LESSONS_QUEUE.md (lessons wait there, not on the ledger)")
+        i = j
+
+    if not moved:
+        print("ledger-archive --lessons: no open `kbdoc:` items in the ledger. Nothing to move.")
+        sys.exit(0)
+    print(f"{len(moved)} open lesson item(s) would move to docs/LESSONS_QUEUE.md "
+          "(whole text; a struck stub keeps each ID resolvable):")
+    print("  " + ", ".join(i for i, _ in moved))
+    for _, block in moved:
+        print("    " + re.sub(r"\s+", " ", block[0])[6:150])
+    if not apply:
+        print("\nDry run. Pass --apply to move them. Nothing was written.")
+        sys.exit(0)
+    existing = queue.read_text(encoding="utf-8") if queue.exists() else QUEUE_HEADER
+    new_queue = existing.rstrip() + "\n\n" + "\n".join("\n".join(b) for _, b in moved).rstrip() + "\n"
+    new_ledger = "\n".join(out)
+    # Conservation: every moved ID is in both files, and every moved line is in the queue.
+    for item_id, block in moved:
+        if not re.search(r"(?m)^- \[-\] " + re.escape(item_id) + r"\b", new_ledger) or any(
+            b not in new_queue for b in block
+        ):
+            print(f"ledger-archive --lessons: accounting does not balance for {item_id} — refusing to write.")
+            sys.exit(0)
+    queue.write_text(new_queue, encoding="utf-8", newline="\n")
+    ledger.write_text(new_ledger, encoding="utf-8", newline="\n")
+    print(f"\nMoved {len(moved)} item(s). Commit docs/SESSION_LEDGER.md and docs/LESSONS_QUEUE.md together.")
+    sys.exit(0)
+
+
 def main() -> None:
     proj = pathlib.Path(project_dir() or pathlib.Path(__file__).resolve().parent.parent.parent)
     cfg, _ = load_config(str(proj))
@@ -80,6 +190,9 @@ def main() -> None:
         print("ledger-archive: docs/SESSION_LEDGER.md has uncommitted changes. A concurrent session may be "
               "mid-edit. Commit first, or pass --force if you are sure this session owns the file.")
         sys.exit(0)
+
+    if "--lessons" in sys.argv:
+        move_lessons(proj, ledger, apply)
 
     days = int(cfg["ledger"].get("move_closed_after_days",
                                  cfg["ledger"].get("prune_closed_after_days", 7)))

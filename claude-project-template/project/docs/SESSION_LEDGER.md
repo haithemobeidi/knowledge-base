@@ -5,7 +5,11 @@
 > Anything phrased like "next session," "before release," "rider," "queued," or
 > "check later" gets a line HERE at the moment it's said.
 >
-> Not bugs (→ the bug doc), not features (→ the backlog), not status (→ the spine).
+> Not bugs (→ the bug doc), not features or ideas (→ the backlog), not status (→ the
+> spine), not lessons to write up (→ `docs/LESSONS_QUEUE.md`), not standing facts or
+> rulings already made (→ `DECISIONS.md` or CURRENT_STATE). Every line here rides in
+> a session's start payload, and `/end` stops a wrap that leaves that payload over
+> its limit — so what fails the worthiness test below is routed, not minted.
 >
 > **Rules** (rationale in the global `PROTOCOL.md`; design reasoning in the
 > template's `DESIGN.md`):
@@ -34,6 +38,10 @@
 >   elsewhere; (3) can't just be done now (under ~10 minutes ⇒ do it); (4) one ID
 >   per loop — sub-facts ride the parent.
 >
+> - **An item that waits on the user's ruling starts its title with `DECIDE:`**
+>   (`**DECIDE: voice on entry-edit — add it or not.**`). No session can close it by
+>   working, so session start lists those first, as the user's calls.
+>
 > - **Closed lines MOVE; they are never deleted.** At `/end`, `[x]`/`[-]` lines
 >   older than `ledger.move_closed_after_days` are appended to
 >   `docs/SESSION_LEDGER_CLOSED.md` — which is never injected and can grow forever.
@@ -53,6 +61,8 @@
 >   own prefix and its own counter — `D-1, M-1` — so two sessions can append at
 >   once without colliding. The prefix says who WROTE it; a tag right after the ID
 >   says who ACTS on it: `→mobile`, `→desktop`, `→all`. No tag = the writer's track.
+>   A session loads only the items its own track acts on, so `→all` puts a line in
+>   EVERY track's payload: use it when every track must act, not for visibility.
 
 <!-- Items start here. The first line is the title; continuation lines are body.
 
