@@ -1,7 +1,7 @@
 ---
 stack: [any, verification, testing, http, spa, debugging, process]
 kind: gotcha
-last_verified: 2026-08-11
+last_verified: 2026-11-13
 ---
 
 # A 200 is not an existence check — run the negative control before trusting any probe
@@ -60,6 +60,7 @@ Two outcomes, both valuable:
 - **APIs that return 200 with an error payload.** Very common in GraphQL and in older REST designs. Status-code checks pass forever.
 - **Boolean pipelines in shell.** `curl ... | grep -q X && echo present || echo missing` collapses *three* states (present / absent / fetch failed) into two, and assigns the failure to "missing." Prefer downloading to a file, asserting the size, then grepping the file.
 - **"Is my deploy live?"** The old asset is often still served for a short window. A check run immediately after deploy tests the *previous* deployment and reads as a routing fault. Control: confirm the response carries something unique to the new build, and re-check after a delay before concluding anything.
+- **A permission or visibility checker run from an admin account.** Every answer comes back "shown", so the run proves the checker finds what is there, not that it can report something missing. Only a real restricted account tests the "not visible" path. Measured 2026-11-12: a role checker went 77 of 85 on an admin-level account with 0 false differences, and its first restricted run found about 30 features missing (redirects and hidden buttons), which the admin runs could never have shown. Also, a control's state can belong to the record, not the role (a button greyed out on a past or checked-in visit), so try several records before blaming the role. The checker itself: [[audit-a-web-apps-ui-from-an-injected-script]].
 
 ## The same disease in your test suite: the vacuous assertion
 
