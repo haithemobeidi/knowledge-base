@@ -20,7 +20,7 @@ _Last updated: 2026-11-18_
 
 ## 📍 NEXT ACTION
 
-**Nothing in flight; the next template work is the user's pick.** Checkpoint's 2026-11-18 cleanup is done and live: its `01651cb5` (the founder's rulings: `shared_owner` desktop, the dispositions as proposed, the webhook-secret warning moved into its CLAUDE.md first) and its first wrap on the new `/end` (`e38bb8e1`) passed all three of §6e's checks. Candidates: BuddySystem integrates the protocol in its own session (the user says "integrate the protocol" there — never from here), ideally after open loop (f) `--retag`, since 7 of its 10 items are `→all`; or the `PROTOCOL.md` trim.
+**Nothing in flight; the next template work is the user's pick.** Checkpoint's 2026-11-18 cleanup is done and live: its `01651cb5` (the founder's rulings: `shared_owner` desktop, the dispositions as proposed, the webhook-secret warning moved into its CLAUDE.md first) and its first wrap on the new `/end` (`e38bb8e1`) passed all three of §6e's checks. Candidates: BuddySystem integrates the protocol in its own session (the user says "integrate the protocol" there — never from here), where `ledger-archive.py --retag` (built 2026-11-18, `049d2d4`) hands its seven `→all` items to the tracks that act; or the `PROTOCOL.md` trim.
 
 ## Template rollout
 
@@ -28,7 +28,7 @@ The template is the KB's real deliverable. This table is what "where do we stand
 
 | Project | Protocol | Synced to template | Notes |
 |---|---|---|---|
-| `claude-project-template` | **v2**; load by track, the `/end` budget gate and the lessons queue since 2026-11-12 (`23dc02b`); shared-state exit, one owner per item, parked items since 2026-11-18 | — | canonical |
+| `claude-project-template` | **v2**; load by track, the `/end` budget gate and the lessons queue since 2026-11-12 (`23dc02b`); shared-state exit, one owner per item, parked items since 2026-11-18, plus `file_caps.twin_exempt` and `ledger-archive.py --retag` the same day | — | canonical |
 | Playmoir / Checkpoint | **v2** (migrated 2026-09-22) | synced to 2026-11-18 and cleaned up (its `01651cb5`) | per track 29,411 (after its first wrap; ceiling 30,000) · 27,325 · 22,425 · 22,614 · 28,520 (desktop · android · ios · steamos · social; was 43,340 · 41,835 · 34,975 · 35,734 · 40,944). ios and steamos are inside the budget and lost their ceilings; android's and social's ceilings are 28,000 · 29,500. Ledger 122 open → 52 open + 59 parked (54 of them until the iOS prototype works). Numbers rechecked from this session, read-only |
 | BuddySystem | **v2** (bootstrapped 2026-10-02) | behind — still on the pre-2026-10-20 single hook wiring | 3 tracks; inside budget on a copy (≤42%). Its CURRENT_STATE is 2,356 chars of tables, so the 2026-11-18 shared cap has nothing to do there; 7 of its 10 open items are `→all` (only new ones are stopped) |
 | Cove, Cove-ACS-Expert, Zendesk-Copilot, armada-astra2, final-fantasy-resonance-ultrawide | v2, single track | behind the 2026-11-12 template | start payload unchanged by it and by 2026-11-18 (verified byte-identical on Cove, Zendesk-Copilot, armada-astra2, Tagsmith, Interview-Prep); they gain the gate + lessons queue + parking |
@@ -108,9 +108,7 @@ shipping … (2026-11-18)", `MIGRATION.md` §6e.
   (d) one resumed session received 4 of 8 hook parts (seen once, 2026-11-01,
   cause not found). ((e), a triage table for Checkpoint's shared state and
   `→all` items, became the 2026-11-18 template change and Checkpoint's §6e
-  cleanup.) (f) 2026-11-18: `ledger-archive.py --retag ID=track` — Checkpoint's
-  cleanup needed a one-off script to retag its `→all` items; worth building
-  before BuddySystem (7 of 10 `→all`) does the same.
+  cleanup.) ((f), `ledger-archive.py --retag`, was asked for and built 2026-11-18.)
 - **Lessons flagged, not written:** a check that only reports gets ignored; it
   has to be able to stop the work (Checkpoint's budget, seven weeks). And
   2026-11-18: a ceiling stops growth but shrinks nothing — whatever every reader
@@ -137,4 +135,6 @@ shipping … (2026-11-18)", `MIGRATION.md` §6e.
   migration brief, obsolete since 2026-09-22).
 - `PROTOCOL.md` is at 221 lines against its own "~200 lines" rule (202 before
   2026-11-12; this session added to it and trimmed nothing). It wants a real
-  trim, as its own sitting.
+  trim, as its own sitting. Same sitting: `ledger-archive.py` crossed the
+  500-line soft cap with `--retag` (566) — split parking/retagging from the
+  closed-line move.
