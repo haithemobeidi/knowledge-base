@@ -67,7 +67,8 @@
 >   fix it; work several tracks must each do names them. New items are never
 >   tagged `→all` (the `/end` gate stops it — naming every track is allowed, and
 >   has to be deliberate); a shared change nobody must act on is a stamped fact in
->   CURRENT_STATE, not an item.
+>   CURRENT_STATE, not an item. To hand items over:
+>   `ledger-archive.py --retag <IDs> --to <track> --apply`.
 >
 > - **PARKED `[~]`:** an open loop no session can act on until a named event (a
 >   lock lifting, a release). Add `→ PARKED <date> until <event>` on its own line

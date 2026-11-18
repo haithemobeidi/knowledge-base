@@ -272,7 +272,7 @@ v2 adds the receiver's half: **restate the NEXT ACTION in your own words, and na
 | `check-payload-budget.py` | **new** | The aggregate guard. Reads the files, reports per-part and total, exits non-zero over budget |
 | `check-ledger-refs.py` | **new** | The copy-forward guard. Every ledger ID cited in `CURRENT_STATE.md` / `ROADMAP.md` classified open / struck / not-in-ledger |
 | `end-derive.py` | **new** | The facts git can prove: commits since the last wrap, files touched grouped by track ownership. Does NOT derive build status — that is Step 0c's result, and inferring it would be unearned confidence |
-| `ledger-archive.py` | **new** | Moves closed lines to `SESSION_LEDGER_CLOSED.md`. Dry run by default; refuses a dirty ledger; balances its line count before writing. `--park`/`--unpark`/`--parked` since 2026-11-18 |
+| `ledger-archive.py` | **new** | Moves closed lines to `SESSION_LEDGER_CLOSED.md`. Dry run by default; refuses a dirty ledger; balances its line count before writing. `--park`/`--unpark`/`--parked` since 2026-11-18, and `--retag IDS --to TRACKS` the same day (Checkpoint's cleanup needed a one-off script for its 35 `→all` items; track names are checked strictly, since a typo read fail-open would send an item to every track) |
 | `state-archive.py` | **new (2026-11-18)** | Multi-track: keeps CURRENT_STATE's untagged shared bullets under `state.shared_max_chars` by moving the oldest to `CURRENT_STATE_ARCHIVE.md`. Dry run by default; refuses to write unless the moved text is in the archive and gone from the state file, line for line |
 | `migrate-docs-v2.py` | **new** | One-time content migration, writes `.new` files beside the originals |
 | everything else | unchanged | |

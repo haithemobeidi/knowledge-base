@@ -87,7 +87,7 @@ Do this **before** writing CURRENT_STATE, so the wrap is written against the led
    ```
 
    **Never delete them.** That file is never injected and may grow forever; an ID cited in a commit subject, a handoff entry or a spine cell has to stay resolvable. (v1 specified this move as prose and it never once ran — 88 closed lines sat in a ledger with a 7-day rule. That is why it is a script.)
-5. Count the open items (parked ones do not count). Over `open_soft_max` → **route, park or close the two oldest stale items now** (items past `stale_after_days`), proposing a disposition for each and letting the user rule. If the session start listed parked items whose event has happened, unpark them (`--parked` lists them; `--unpark <IDs> --because "…" --apply`). Two items, not a triage sitting: a level-based cap that has been exceeded for months is not a cap, and a rate you would not bother skipping is.
+5. Count the open items (parked ones do not count). Over `open_soft_max` → **route, park or close the two oldest stale items now** (items past `stale_after_days`), proposing a disposition for each and letting the user rule. If the session start listed parked items whose event has happened, unpark them (`--parked` lists them; `--unpark <IDs> --because "…" --apply`). An item that belongs to another track is handed over with `--retag <IDs> --to <track> --apply` — once the user has ruled, when it was another track's. Two items, not a triage sitting: a level-based cap that has been exceeded for months is not a cap, and a rate you would not bother skipping is.
 
 ## Step 1e — `check-ledger-refs.py` (the copy-forward guard)
 
