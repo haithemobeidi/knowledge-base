@@ -52,7 +52,7 @@ A v2 repo with two or more tracks **loads by track**: the start hook injects onl
 python .claude/scripts/session-start-context.py --track <name>
 ```
 
-It prints your track's NEXT ACTION, the shared state, the open ledger items your track acts on (tagged for it, tagged `→all`, or unassigned — the ones waiting on the user's ruling first), the status spine and the handoff entry you are accepting. If the output ends with a **PAGE** line, run the command it names too. That output IS Steps 1–4; do not also read the state docs whole — every track's state in every session is the 77,000-character payload this replaced. Then go to Step 5.
+It prints your track's NEXT ACTION, the shared state (bullets tagged for other tracks left out), the open ledger items your track acts on (tagged for it, tagged `→all`, or unassigned — the ones waiting on the user's ruling first; parked items only as a count per event they wait on), the status spine and the handoff entry you are accepting. If the output ends with a **PAGE** line, run the command it names too. That output IS Steps 1–4; do not also read the state docs whole — every track's state in every session is the 77,000-character payload this replaced. Then go to Step 5.
 
 (Only when the project's scripts carry it: `grep -c -- '--track' .claude/scripts/session-start-context.py` prints 0 on a project not yet synced to the template — there, the hook still injects everything and Steps 1–4 apply as written. Single-track and v1 repos: the hook injects the documents and this step does not apply; if the hook did not fire, the same command with any name prints them.)
 

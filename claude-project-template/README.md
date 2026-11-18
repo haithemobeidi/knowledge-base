@@ -62,7 +62,7 @@ So: the install script is per machine, the sync is per project, and neither is e
 2. `python .claude/scripts/check-template-drift.py` — lists what differs. Tell the user and get a yes.
 3. `python .claude/scripts/check-template-drift.py --sync` — copies the files and runs the adoption steps (adds any new project document, records the budget gate). If the output shows only `synced …` lines and no adoption text, the copy that ran predates adoption: run `python .claude/scripts/check-template-drift.py --adopt` once.
 4. Do what it prints under "Left for you", if anything (each line is an exact command).
-5. `python .claude/scripts/check-payload-budget.py --strict` must exit 0. Commit `.claude/` plus any docs the steps touched, push per the project's `push_policy`.
+5. `python .claude/scripts/check-payload-budget.py --strict` (multi-track: `--track <yours>`) must exit 0 — for a multi-track project syncing to the 2026-11-18 template, after the one-time cleanup in `MIGRATION.md` §6e. Commit `.claude/` plus any docs the steps touched, push per the project's `push_policy`.
 6. Start a fresh session and check the start-up notes look right (the newest `MIGRATION.md` section says what to look for).
 
 The per-change details — what a given template version alters, and what to verify after — are in [`MIGRATION.md`](./MIGRATION.md); the newest section is last before "Commit".
@@ -122,7 +122,8 @@ Two sessions, one checkout, one branch, on purpose: they see each other's work i
 
 - Each session **declares its track** before touching anything; the start hook gates on it.
 - **IDs are prefixed per track with independent counters** (`D-12`, `M-3`), so two writers never collide. A tag `→mobile` / `→all` right after the ID says who acts on an item; legacy items are tagged once at migration.
-- Each track **edits only its owned paths plus shared paths**; shared changes are announced with a tagged ledger line; deploy state lives in CURRENT_STATE's Shared block.
+- Each track **edits only its owned paths plus shared paths**; a shared change another track must act on gets a ledger line tagged for exactly those tracks; a problem on a shared path gets one owner (`shared_owner`), never `→all`; deploy state lives in CURRENT_STATE's Shared block.
+- **What every track loads has an exit:** a CURRENT_STATE bullet that is one track's state is tagged `- →<track>` and only that track loads it; the untagged shared bullets are capped (`state.shared_max_chars`), and `/end` runs `state-archive.py`, which moves the oldest to `docs/CURRENT_STATE_ARCHIVE.md`.
 - The other session's uncommitted files are **left alone and reported**; the stop hook tolerates them only inside that track's owned paths; `git add -A` is forbidden.
 - **A push publishes the whole branch** — commits that are not yours are named in the report.
 - CURRENT_STATE has one NEXT ACTION per track; handoff entries carry the track.
@@ -132,7 +133,7 @@ Two sessions, one checkout, one branch, on purpose: they see each other's work i
 
 The ledger holds open loops a future session must act on — queued tests, gates, riders, deferred decisions — written **at the moment** they arise. It is not for bugs, feature ideas, or status (those have their own homes), and not for analysis: an item opens with a bold title line and the analysis goes to a linked doc (v1 projects cap an item at 600 characters). The start hook injects a one-line manifest of every open item (`ID →tag (date) TITLE`), expands the items each NEXT ACTION cites, groups by track, lists what is stale — and delivers it in parts, because Claude Code caps one hook string at 10,000 characters. Before this cap one project's ledger reached 99 open items averaging 2,500 characters and injected ~250KB at every session start.
 
-Three things keep it from filling up again. Lessons to write up go to `docs/LESSONS_QUEUE.md`, which is never loaded at start, and take no ledger ID. An item that waits on the user's ruling starts its title with `DECIDE:` and is listed first at session start, as the user's calls. And `/end` Step 3b (`check-payload-budget.py --strict --ratchet`) stops a wrap that leaves the start payload over its limit, so past that point opening an item means closing or routing one.
+Four things keep it from filling up again. Lessons to write up go to `docs/LESSONS_QUEUE.md`, which is never loaded at start, and take no ledger ID. An item that waits on the user's ruling starts its title with `DECIDE:` and is listed first at session start, as the user's calls. An item that waits on a named event is parked (`[~]`, `ledger-archive.py --park … --until …`): counted by event, not listed. And `/end` Step 3b (`check-payload-budget.py --strict --ratchet`) stops a wrap that leaves the start payload over its limit, so past that point opening an item means closing or routing one.
 
 ## Troubleshooting
 

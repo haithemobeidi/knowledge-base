@@ -61,6 +61,15 @@
   "$tracks": "Parallel tracks — two sessions working on two VERSIONS of the app (e.g. desktop and mobile) in the same checkout on the same branch. Empty = single track (ledger IDs are L-N, no ownership rules). With 2+ tracks: each session declares its track at start, mints IDs with its own prefix (D-1, M-1 — independent counters, so no collisions), edits only its own 'owns' paths plus shared_paths, and the stop hook tolerates the OTHER track's uncommitted files only inside that track's owns. Optional \"aliases\": other words your existing docs use for the track (\"android\", \"phone\") — accepted in →tags and used to match legacy handoff lines. Optional \"check_command\": this track's own /end check (see $check_command). Example: [{\"name\": \"desktop\", \"prefix\": \"D\", \"owns\": [\"apps/desktop/\", \"packages/frontend/\"]}, {\"name\": \"mobile\", \"prefix\": \"M\", \"owns\": [\"platforms/android/\"], \"aliases\": [\"android\", \"phone\"]}]",
   "tracks": [],
 
-  "$shared_paths": "Paths every track may edit (shared packages, the server, docs). A change here must be announced with a ledger line tagged →all or →<other track> saying what changed and what the other side must do (rebuild, redeploy, run a migration). Example: [\"packages/core/\", \"apps/server/\"]",
-  "shared_paths": []
+  "$shared_paths": "Paths every track may edit (shared packages, the server, docs). A change here that another track must ACT on (rebuild, redeploy, run a migration) gets a ledger line tagged for exactly those tracks, by name; a change nobody must act on is a stamped fact in CURRENT_STATE's Shared block. Example: [\"packages/core/\", \"apps/server/\"]",
+  "shared_paths": [],
+
+  "$shared_owner": "Who owns an open problem found on a shared path (a server advisory, a warning, a shared script's bug): one track name for all shared paths, or {\"apps/server/\": \"desktop\", \"scripts/\": \"desktop\"} by path. Empty = the track that will fix it. Never →all: on one project 40 of 122 open items were →all because shared paths had no owner, and each rode in every track's start payload. The /end gate stops a wrap that adds an →all item from the wrapping track.",
+  "shared_owner": "",
+
+  "$state": "Multi-track v2 only. Everything in CURRENT_STATE outside the NEXT ACTION sections is loaded by every track; a bullet tagged `- →<track>` is loaded only by that track. shared_max_chars caps the UNTAGGED bullets; at /end, state-archive.py moves the oldest (by the newest date in each) to docs/CURRENT_STATE_ARCHIVE.md, never loaded, and the gate stops a wrap that leaves them over. Exempt (never counted or moved): sections whose heading says 'blocker', and the never_move sections — each track's status of record, whose per-track rows are tagged instead. Raising shared_max_chars is raising what every session pays: the user's decision.",
+  "state": {
+    "shared_max_chars": 5000,
+    "never_move": ["shipped", "build status"]
+  }
 }

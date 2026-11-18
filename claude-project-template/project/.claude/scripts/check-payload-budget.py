@@ -51,9 +51,20 @@ sections and parts that script actually built. Re-deriving the numbers from
 the files would be measuring a different artifact than the one that ships,
 which is the mistake this whole check exists to catch.
 
+The growth rules are the fourth half, found 2026-11-18. The size gate held each
+track at its ceiling, and nothing underneath it ever shrank: CURRENT_STATE's
+shared block had no way out (no track may prune another's lines), 40 of 122
+open items were tagged for every track because shared paths had no owner, and
+most of the rest waited on one ruling while every session loaded their titles.
+So `--strict` also stops a wrap that leaves the shared block over its cap
+(state-archive.py fixes it), that adds an item tagged for every track from the
+wrapping track (`--track <name>`; tag the owner or name the tracks), or that
+parks an item without naming the event it waits for.
+
 Usage:
     python .claude/scripts/check-payload-budget.py                    # report
-    python .claude/scripts/check-payload-budget.py --strict --ratchet # the /end gate
+    python .claude/scripts/check-payload-budget.py --strict --ratchet # the /end gate (single track)
+    python .claude/scripts/check-payload-budget.py --strict --ratchet --track <name>  # the /end gate (multi-track)
     python .claude/scripts/check-payload-budget.py --init-ceiling     # once, at adoption (check-template-drift.py runs it)
     python .claude/scripts/check-payload-budget.py --json             # machine-readable
 
@@ -72,12 +83,18 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from protocol_config import (  # noqa: E402
     CONFIG_REL_PATH,
+    capped_bullets,
+    item_targets,
     load_config,
     multi_track,
     payload_keys,
     payload_limit,
     project_dir,
     protocol_version,
+    seg_chars,
+    shared_owner,
+    state_segments,
+    track_aliases,
 )
 
 # Windows consoles default to a legacy code page (cp1252 here), and every
@@ -172,6 +189,86 @@ def open_ledger_ids(proj: str) -> list[str]:
         return []
     text = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
     return re.findall(r"^\s*- \[ \] ([A-Za-z]{1,4}-\d+)\b", text, flags=re.MULTILINE)
+
+
+def _arg(flag: str) -> str | None:
+    if flag in sys.argv:
+        i = sys.argv.index(flag)
+        if i + 1 < len(sys.argv) and not sys.argv[i + 1].startswith("--"):
+            return sys.argv[i + 1]
+    return None
+
+
+def _git(proj: str, *args: str) -> str:
+    try:
+        return subprocess.run(["git", *args], cwd=proj, capture_output=True, text=True, encoding="utf-8",
+                              timeout=20, check=False).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def all_tagged(text: str, aliases: dict[str, str]) -> set[str]:
+    """IDs of the open `[ ]` items whose tag resolves to every track: `→all`,
+    or a tag naming no declared track (which fails open to every track)."""
+    text = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
+    out: set[str] = set()
+    for ln in text.splitlines():
+        m = re.match(r"- \[ \] ([A-Za-z]{1,4}-\d+)", ln)
+        targets = item_targets(ln, aliases) if m else None
+        if m and targets and "all" in targets:
+            out.add(m.group(1))
+    return out
+
+
+def new_all_items(proj: str, cfg: dict, track: str | None) -> list[str] | None:
+    """Open items tagged for every track that were not, at this track's last
+    wrap — the last commit whose subject is `Session (<track>)…` or `Session
+    followup (<track>)…`; without a track, or before its first such commit,
+    the last commit touching docs/HANDOFF_LOG.md.
+
+    Per track, not "the last wrap": the tracks share one working tree, so a
+    line this track added and has not committed yet is swept into another
+    track's wrap commit, and against THAT baseline it was no longer new (found
+    in review, 2026-11-18). None when there is nothing to compare with: then
+    old and new cannot be told apart, and the check does not run."""
+    base = ""
+    if track:
+        pat = r"^Session( followup)? \(" + re.escape(track) + r"\)"
+        base = _git(proj, "log", "-n", "1", "-i", "-E", f"--grep={pat}", "--format=%H").strip()
+    if not base:
+        base = _git(proj, "log", "-n", "1", "--format=%H", "--", "docs/HANDOFF_LOG.md").strip()
+    if not base:
+        return None
+    before = _git(proj, "show", f"{base}:docs/SESSION_LEDGER.md")
+    try:
+        now = (pathlib.Path(proj) / "docs" / "SESSION_LEDGER.md").read_text(encoding="utf-8")
+    except OSError:
+        return None
+    aliases = track_aliases(cfg)
+    return sorted(all_tagged(now, aliases) - all_tagged(before, aliases))
+
+
+def unnamed_parked(proj: str) -> list[str]:
+    """Parked `[~]` items with no `→ PARKED … until <event>` line. An item that
+    waits on nothing in particular is never woken up — it is a deletion that
+    looks like a deferral. Read over the same extent the start hook reads as
+    the item (up to the next `- [`, nested or not), so the two never disagree
+    about whether the event is there."""
+    try:
+        lines = (pathlib.Path(proj) / "docs" / "SESSION_LEDGER.md").read_text(encoding="utf-8").split("\n")
+    except OSError:
+        return []
+    out: list[str] = []
+    for i, ln in enumerate(lines):
+        m = re.match(r"- \[~\] ([A-Za-z]{1,4}-\d+)", ln)
+        if not m:
+            continue
+        j = i + 1
+        while j < len(lines) and not lines[j].lstrip().startswith("- [") and not lines[j].startswith("#"):
+            j += 1
+        if not re.search(r"(?:→|->)\s*PARKED\b[^\n]*?\buntil\b\s*\S", "\n".join(lines[i:j]), re.IGNORECASE):
+            out.append(m.group(1))
+    return out
 
 
 def ceiling_for(total: int) -> int:
@@ -313,6 +410,52 @@ def main() -> None:
                     f"{len(lost)} open ledger item(s) are loaded by NO track's session: "
                     + ", ".join(lost[:15]) + (" …" if len(lost) > 15 else "")
                 )
+    # Growth rules (2026-11-18). The size gate below holds each payload at its
+    # limit; these stop the three ways it regrew underneath that limit.
+    rules: list[str] = []
+    notes: list[str] = []
+    if by_track:
+        try:
+            state_text = (pathlib.Path(proj) / "docs" / "CURRENT_STATE.md").read_text(encoding="utf-8")
+        except OSError:
+            state_text = ""
+        cap = int((cfg.get("state") or {}).get("shared_max_chars", 5000))
+        shared = sum(seg_chars(s) for s in capped_bullets(state_segments(state_text, cfg)))
+        if shared > cap:
+            rules.append(
+                f"CURRENT_STATE's shared block (the untagged bullets every track loads) is {shared:,} chars, over "
+                f"its cap of {cap:,} — run `python .claude/scripts/state-archive.py --apply` (it moves the oldest "
+                "to docs/CURRENT_STATE_ARCHIVE.md; tag a bullet that is one track's state `- →<track>` first)"
+            )
+    # Which track is wrapping (`--track`): its own items stop the wrap; another
+    # live session's uncommitted line in the shared tree is only a note.
+    said = _arg("--track")
+    name = track_aliases(cfg).get(said.strip().lower()) if said else None
+    mine = next((t["prefix"] for t in cfg.get("tracks") or [] if t["name"] == name), None)
+
+    def is_mine(item_id: str) -> bool:
+        if not multi_track(cfg):
+            return True
+        return bool(mine) and item_id.split("-")[0].upper() == mine.upper()
+
+    if by_track:
+        fresh = new_all_items(proj, cfg, name)
+        for item_id in fresh or []:
+            owner = shared_owner(cfg)
+            hint = (f"its owner (`shared_owner`: {owner})" if owner else "the one track that will act on it")
+            line = (f"{item_id} is a new item tagged for every track — it lands in every track's start payload. "
+                    f"Tag {hint}, or the tracks that must act, by name (`→desktop/ios`); naming them all is "
+                    "allowed, deliberately")
+            (rules if is_mine(item_id) else notes).append(line)
+    parked_bad = unnamed_parked(proj)
+    for group, bucket in (([i for i in parked_bad if is_mine(i)], rules),
+                          ([i for i in parked_bad if not is_mine(i)], notes)):
+        if group:
+            bucket.append(
+                f"{len(group)} parked item(s) name no event to wait for ({', '.join(group[:10])}) — give each "
+                "one: `python .claude/scripts/ledger-archive.py --park <IDs> --until \"<event>\" --apply` "
+                "(works on an item already parked), or unpark it (`--unpark <IDs> --apply`)"
+            )
     if oversize_parts:
         problems.append(
             "part(s) over the harness's 10,000-char string cap: " + ", ".join(l for _, l in oversize_parts)
@@ -383,7 +526,7 @@ def main() -> None:
                 p["over_limit"] = p["total"] > p["limit"]
 
     over_limit = [p for p in payloads if p["over_limit"]]
-    failed = bool(problems or over_limit)
+    failed = bool(problems or over_limit or rules)
 
     if "--json" in sys.argv:
         worst = max(payloads, key=lambda p: p["total"])
@@ -400,6 +543,7 @@ def main() -> None:
             "available_parts": available, "part_chars": part_cap,
             "deliverable_ceiling": available * part_cap,
             "undeliverable": bool(problems), "problems": problems,
+            "growth_rules": rules, "notes": notes,
             "ceiling_changes": changes if wrote else [],
             "sections": [{"chars": n, "label": l} for n, l in worst["sections"]],
         }, indent=2))
@@ -456,6 +600,10 @@ def main() -> None:
 
     if problems:
         print("UNDELIVERABLE — " + "; ".join(problems) + ".")
+    for r in rules:
+        print("GROWTH — " + r + ".")
+    for n in notes:
+        print("Note (another track's item, or no --track given — tell that session) — " + n + ".")
     for p in payloads:
         if not p["over_target"]:
             continue
@@ -480,7 +628,10 @@ def main() -> None:
         print("A wrap must not leave a payload over its limit. Shrink what this session added, then rerun:")
         print("  - ledger: close what is done; move ideas to the backlog, lessons to docs/LESSONS_QUEUE.md,")
         print("    standing facts to DECISIONS.md or CURRENT_STATE — an open loop is the only thing that earns an ID")
-        print("  - CURRENT_STATE: app state only; narrative belongs in the handoff entry, which costs nothing here")
+        print("  - ledger: park what no session can act on until a named event (ledger-archive.py --park ID --until …);")
+        print("    give an item tagged for every track its one owner")
+        print("  - CURRENT_STATE: app state only; narrative belongs in the handoff entry, which costs nothing here;")
+        print("    tag a bullet that is one track's state `- →<track>` so only that track loads it")
         print("  - never by raising target_chars or a ceiling: that is the user's decision, recorded in DECISIONS.md")
     elif not failed and not any(p["over_target"] for p in payloads):
         worst = max(payloads, key=lambda q: q["total"])

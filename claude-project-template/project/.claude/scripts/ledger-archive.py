@@ -20,9 +20,20 @@ Safety:
     be mid-edit, and two writers on this file is how items get lost.
   - Counts lines in and out and refuses to write if they do not balance.
 
+Parking. An open loop no session can act on until a named event (a lock
+lifting, a release) is PARKED: `[~]` plus a line `→ PARKED <date> until
+<event>`. Parked items are not listed at session start — they are counted,
+grouped by the event — so they stop costing every session a title. When the
+event happens, the session that sees it unparks them. One project had most of
+its 122 open items waiting on a single ruling, every one of them loaded by
+every session for six weeks.
+
 Usage:
     python .claude/scripts/ledger-archive.py            # what would move
     python .claude/scripts/ledger-archive.py --apply    # move it
+    python .claude/scripts/ledger-archive.py --park D-28,M-67 --until "the iOS prototype works" [--apply]
+    python .claude/scripts/ledger-archive.py --unpark D-28,M-67 [--because "iOS prototype passed"] [--apply]
+    python .claude/scripts/ledger-archive.py --parked   # list parked items by the event they wait on
 """
 
 from __future__ import annotations
@@ -176,6 +187,120 @@ def move_lessons(proj: pathlib.Path, ledger: pathlib.Path, apply: bool) -> None:
     sys.exit(0)
 
 
+def _arg(flag: str) -> str | None:
+    if flag in sys.argv:
+        i = sys.argv.index(flag)
+        if i + 1 < len(sys.argv) and not sys.argv[i + 1].startswith("--"):
+            return sys.argv[i + 1]
+    return None
+
+
+def _item_end(lines: list[str], i: int) -> int:
+    """One past the last line of the item starting at `i` — the same extent the
+    start hook reads as one item — without its trailing blank lines."""
+    j = i + 1
+    while j < len(lines) and not lines[j].startswith(("- [", "#", "<!--", "```", "~~~")):
+        j += 1
+    while j > i + 1 and not lines[j - 1].strip():
+        j -= 1
+    return j
+
+
+PARKED_LINE = re.compile(r"(?:→|->)\s*PARKED\b[^\n]*?\buntil\b\s*(\S.*)", re.IGNORECASE)
+
+
+def list_parked(ledger: pathlib.Path) -> None:
+    lines = ledger.read_text(encoding="utf-8").split("\n")
+    groups: dict[str, list[str]] = {}
+    for i, ln in enumerate(lines):
+        m = re.match(r"- \[~\] ([A-Za-z]{1,4}-\d+)", ln)
+        if not m:
+            continue
+        hits = [p.group(1) for p in (PARKED_LINE.search(x) for x in lines[i:_item_end(lines, i)]) if p]
+        event = re.split(r"[.;](?:\s|$)", hits[-1].strip())[0] if hits else "(no event named — name one)"
+        title = re.search(r"\*\*(.+?)\*\*", ln)
+        groups.setdefault(event, []).append(f"{m.group(1)}  {(title.group(1) if title else ln[6:])[:100]}")
+    if not groups:
+        print("No parked items.")
+        sys.exit(0)
+    for event, items in sorted(groups.items(), key=lambda kv: -len(kv[1])):
+        print(f"until {event} — {len(items)}:")
+        for it in items:
+            print(f"  {it}")
+    print("\nUnpark the items whose event has happened: --unpark ID,ID --because \"…\" --apply")
+    sys.exit(0)
+
+
+def park(ledger: pathlib.Path, ids: str, unpark: bool, apply: bool) -> None:
+    """`--park IDS --until EVENT` / `--unpark IDS [--because WHY]`: flip the
+    checkbox and add one dated line saying why. Nothing else in the item is
+    touched.
+
+    The note goes right under the ID line (after any earlier PARKED/UNPARKED
+    notes), not at the end of the item: the start hook reads an item only up
+    to its first nested `- [ ]` child, so a note after the children was
+    invisible to it while the gate saw it. `--park` on an item that is already
+    parked adds a fresh note — that is how one parked without an event gets
+    one. Unlike the archive move, this does not refuse a ledger with
+    uncommitted changes: during /end it always has them (this session's own),
+    and the edit is to named lines only."""
+    until = (_arg("--until") or "").strip()
+    because = (_arg("--because") or "").strip()
+    if not unpark and not until:
+        print('ledger-archive --park: say what the items wait for: --until "<event>". A parked item that names '
+              "no event is never woken up, and the budget gate stops a wrap on one.")
+        sys.exit(1)
+    want = {x.strip().upper() for x in ids.split(",") if x.strip()}
+    src, dst = ("- [~]", "- [ ]") if unpark else ("- [ ]", "- [~]")
+    today = _dt.date.today().isoformat()
+    raw = ledger.read_bytes()
+    lines = raw.decode("utf-8").replace("\r\n", "\n").split("\n")
+    out: list[str] = []
+    done: list[str] = []
+    other: list[str] = []
+    in_comment = False
+    i = 0
+    while i < len(lines):
+        ln = lines[i]
+        if in_comment:
+            in_comment = "-->" not in ln
+        elif "<!--" in ln and "-->" not in ln[ln.rindex("<!--"):]:
+            in_comment = True
+        m = None if in_comment else re.match(r"- \[(.)\] ([A-Za-z]{1,4}-\d+)\b", ln)
+        if m and m.group(2).upper() in want:
+            if ln.startswith(src) or (not unpark and ln.startswith("- [~]")):
+                j = _item_end(lines, i)
+                block = lines[i:j]
+                block[0] = dst + block[0][5:]
+                k = 1
+                while k < len(block) and re.match(r"\s*(?:→|->)\s*(?:UN)?PARKED\b", block[k]):
+                    k += 1
+                note = (f"  → UNPARKED {today}" + (f": {because}" if because else "")) if unpark \
+                    else f"  → PARKED {today} until {until}"
+                out.extend(block[:k] + [note] + block[k:])
+                done.append(m.group(2))
+                i = j
+                continue
+            other.append(f"{m.group(2)} is [{m.group(1)}]")
+        out.append(ln)
+        i += 1
+    missing = sorted(want - {d.upper() for d in done} - {o.split()[0].upper() for o in other})
+    verb = "unpark" if unpark else "park"
+    print(f"{len(done)} item(s) would {verb}: {', '.join(done) or 'none'}"
+          + ("" if unpark else f" — until {until}"))
+    if other:
+        print("  left alone (not " + ("parked" if unpark else "open or parked") + "): " + ", ".join(other))
+    if missing:
+        print("  not found in the ledger: " + ", ".join(missing))
+    if not apply or not done:
+        print("\nDry run. Pass --apply to write it." if done else "\nNothing to do.")
+        sys.exit(0)
+    nl = "\r\n" if b"\r\n" in raw else "\n"
+    ledger.write_bytes(nl.join(out).encode("utf-8"))
+    print(f"\nDone. Commit docs/SESSION_LEDGER.md.")
+    sys.exit(0)
+
+
 def main() -> None:
     proj = pathlib.Path(project_dir() or pathlib.Path(__file__).resolve().parent.parent.parent)
     cfg, _ = load_config(str(proj))
@@ -185,7 +310,18 @@ def main() -> None:
         print("ledger-archive: no docs/SESSION_LEDGER.md, skipped")
         sys.exit(0)
 
+    if "--parked" in sys.argv:
+        list_parked(ledger)
+
     apply = "--apply" in sys.argv
+    for flag, unpark in (("--park", False), ("--unpark", True)):
+        if flag in sys.argv:
+            ids = _arg(flag)
+            if not ids:
+                print(f"ledger-archive {flag}: give the IDs, comma-separated: {flag} D-28,M-67")
+                sys.exit(1)
+            park(ledger, ids, unpark, apply)
+
     if apply and tracked_dirty(proj, "docs/SESSION_LEDGER.md") and "--force" not in sys.argv:
         print("ledger-archive: docs/SESSION_LEDGER.md has uncommitted changes. A concurrent session may be "
               "mid-edit. Commit first, or pass --force if you are sure this session owns the file.")

@@ -39,6 +39,11 @@ _Last updated: <YYYY-MM-DD HH:MM> (<track, if any>)_
      track's section plus everything that is not a NEXT ACTION section, so the
      heading must be `## … NEXT ACTION — <track name>` exactly as below, and
      everything outside those sections is paid for by every track's session.
+     Outside them, a bullet that is ONE track's state starts with its tag
+     (`- →mobile **Mobile 1.3.0 — in review** …`) and only that track loads it.
+     The untagged bullets are capped (protocol.json → state.shared_max_chars);
+     at /end, state-archive.py moves the oldest to docs/CURRENT_STATE_ARCHIVE.md.
+     It never touches Shipped, Build status or blockers — tag their rows.
 
 ## 📍 NEXT ACTION — desktop
 <one line>
@@ -64,8 +69,9 @@ multi-track repos. Generated at `/end` from the last check run where possible.>
 ## Shared services
 
 <Multi-track or client+server only. Deploy state both sides consume, each stamped
-`(by <track>, <date>)`. Facts about what is live — NOT what a session did to it, and
-never a ledger item's status.>
+`(by <track>, <date>)` — the date is what decides which facts move to the archive
+first when the block is over its cap. Facts about what is live — NOT what a
+session did to it, and never a ledger item's status.>
 
 - Server: v<N> live — <what it carries>
 - Schema: migration <NNNN> applied

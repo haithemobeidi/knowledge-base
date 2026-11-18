@@ -77,7 +77,7 @@ Do this **before** writing CURRENT_STATE, so the wrap is written against the led
 
 1. Read the ledger **from disk** (a concurrent session may have edited it).
 2. Disposition every `[ ]` item this session touched: `[x]` + `→ DONE <date>: <one line>`, or `[-]` + reason. Untouched items stay `[ ]`. **Never strike an item you merely don't recognise.** Multi-track: only your prefix's lines, plus lines tagged for you or `→all` that you resolved (note "closed by <track>").
-3. Append `[ ]` lines for anything this session queued or deferred that isn't captured — scan for "next session", "before release", "check later", riders, gates. Apply the worthiness test (open loop with a done-condition / not tracked elsewhere / can't be done in 10 minutes / one ID per loop), and **route what fails it instead of minting an ID**: an idea → the backlog; a lesson → `docs/LESSONS_QUEUE.md`; a standing fact or a ruling already made → `DECISIONS.md` or CURRENT_STATE; a bug → the bug doc. An item that waits on **the user's ruling** rather than on work starts its title with `DECIDE:` — session start lists those first, as the user's calls. **The first line must be a self-contained TITLE** — it is the only part a future session sees in the manifest, so lead with the headline and put the detail on continuation lines. **There is no length cap**: keep the item whole, here. Multi-track: mint with your prefix; put `→<other track>` / `→all` right after the ID (`D-9 →mobile (2026-09-09) …`).
+3. Append `[ ]` lines for anything this session queued or deferred that isn't captured — scan for "next session", "before release", "check later", riders, gates. Apply the worthiness test (open loop with a done-condition / not tracked elsewhere / can't be done in 10 minutes / one ID per loop), and **route what fails it instead of minting an ID**: an idea → the backlog; a lesson → `docs/LESSONS_QUEUE.md`; a standing fact or a ruling already made → `DECISIONS.md` or CURRENT_STATE; a bug → the bug doc. An item that waits on **the user's ruling** rather than on work starts its title with `DECIDE:` — session start lists those first, as the user's calls. **The first line must be a self-contained TITLE** — it is the only part a future session sees in the manifest, so lead with the headline and put the detail on continuation lines. **There is no length cap**: keep the item whole, here. Multi-track: mint with your prefix; put `→<other track>` right after the ID (`D-9 →mobile (2026-09-09) …`). **One owner, never `→all`:** a problem on a shared path goes to `shared_owner` (protocol.json) or the track that will fix it; work several tracks must each do names them (`→desktop/ios`); a shared change nobody must act on is a stamped Shared fact in CURRENT_STATE, not an item. Step 3b stops a wrap that adds an `→all` item from your track. An item no session can act on until a named event (a lock lifting, a release) is **parked**, not left open: `python .claude/scripts/ledger-archive.py --park <IDs> --until "<event>" --apply`.
 4. **MOVE** closed lines to `docs/SESSION_LEDGER_CLOSED.md` — run the script, do not do it by hand:
 
    ```bash
@@ -86,7 +86,7 @@ Do this **before** writing CURRENT_STATE, so the wrap is written against the led
    ```
 
    **Never delete them.** That file is never injected and may grow forever; an ID cited in a commit subject, a handoff entry or a spine cell has to stay resolvable. (v1 specified this move as prose and it never once ran — 88 closed lines sat in a ledger with a 7-day rule. That is why it is a script.)
-5. Count the open items. Over `open_soft_max` → **route or close the two oldest stale items now** (items past `stale_after_days`), proposing a disposition for each and letting the user rule. Two items, not a triage sitting: a level-based cap that has been exceeded for months is not a cap, and a rate you would not bother skipping is.
+5. Count the open items (parked ones do not count). Over `open_soft_max` → **route, park or close the two oldest stale items now** (items past `stale_after_days`), proposing a disposition for each and letting the user rule. If the session start listed parked items whose event has happened, unpark them (`--parked` lists them; `--unpark <IDs> --because "…" --apply`). Two items, not a triage sitting: a level-based cap that has been exceeded for months is not a cap, and a rate you would not bother skipping is.
 
 ## Step 1e — `check-ledger-refs.py` (the copy-forward guard)
 
@@ -124,6 +124,18 @@ This step exists because the rule lived only as prose ("flag it in chat"): 17 se
 
 **Not here:** session narrative (that is the handoff entry) · any ledger item's *status* (cite the ID) · a copy of the phase/block list (that is the spine) · a "things to watch" pile. On one project those turned this file into 92,000 characters, 63% of it a 30-session narrative, injected whole at every session start. Overwrite, do not append.
 
+**Multi-track — the shared block has a cap, and a script keeps it.** Everything outside the NEXT ACTION sections is loaded by every track's session. So:
+
+- A bullet that is **one track's state** — its build status, its shipped version — starts with its tag, `- →<track> **…**`, and only that track loads it. Untagged means every track needs it.
+- Then run, every wrap that touched CURRENT_STATE:
+
+  ```bash
+  python .claude/scripts/state-archive.py            # what would move
+  python .claude/scripts/state-archive.py --apply
+  ```
+
+  When the untagged bullets are over `state.shared_max_chars` it moves the oldest (by the newest date in each; undated counts as oldest) to `docs/CURRENT_STATE_ARCHIVE.md`, which is never loaded. It never touches blocker sections or Shipped / Build status (each track's status of record — tag those rows instead). Read the dry-run list first: a bullet in it that is one track's state should be tagged instead; a standing ruling belongs in DECISIONS.md (and in the NEXT ACTION of the tracks it constrains). A moved fact that every track still needs goes back with today's stamp, shorter — that is the only way back. No track prunes another track's lines by hand; this script is the exit. Step 3b stops a wrap that leaves the block over its cap. (No `.claude/scripts/state-archive.py` in the project: it predates this step, which arrives with its template sync, `MIGRATION.md` §6e — skip it, never sync mid-wrap.)
+
 ## Step 3 — Append one entry to `docs/HANDOFF_LOG.md`
 
 First, get the facts from git rather than from memory:
@@ -156,13 +168,15 @@ A post-`/end` mini-wrap appends an entry covering ONLY the delta since the previ
 ## Step 3b — Payload budget (a GATE: non-zero exit → STOP)
 
 ```bash
-python .claude/scripts/check-payload-budget.py --strict --ratchet
+python .claude/scripts/check-payload-budget.py --strict --ratchet                  # single track
+python .claude/scripts/check-payload-budget.py --strict --ratchet --track <yours>  # multi-track
 ```
 
 Measures what the next session will load — per track in a multi-track repo (the start hook plus that track's `--track` load) — against its **limit**: `payload.target_chars`, or the ceiling recorded for it in `protocol.json` → `payload.ceiling_chars` when the project was already over the budget when this gate arrived. **Non-zero exit → STOP. Do not commit the wrap** until it passes; the output names the payload, how far over it is and its largest contributor.
 
 - **OVER ITS LIMIT** — this session left a payload bigger than it is allowed to be. Shrink what this session added: close ledger items that are done; route the ones that fail the worthiness test (idea → backlog, lesson → `docs/LESSONS_QUEUE.md`, standing fact → DECISIONS.md); cut narrative out of CURRENT_STATE (it belongs in the handoff entry, which costs nothing here). Move text, never delete it, and never strike an open loop to make room. In a multi-track repo an item tagged `→all` lands in every track's payload — if that is what tipped another track over, retag it for the tracks that actually act on it.
 - **UNDELIVERABLE** — the next session would not receive everything (a hook part over the cap, more parts than `settings.json` wires, a handoff entry not loaded whole, an open item no track's session loads). Fix that first.
+- **GROWTH** — one of the three ways the payload regrew under its ceiling: CURRENT_STATE's shared block over its cap (run `state-archive.py --apply`, Step 2); an item tagged for every track added by your track since the last wrap (give it its one owner, or name the tracks that act); a parked item that names no event (add one, or unpark it). Another track's new `→all` item is printed as a note, not a stop — tell that session.
 - **Over budget, inside its ceiling** — passes. `--ratchet` lowers the ceiling to the new size whenever the payload ends a wrap smaller, and removes it once the payload is inside the budget; commit `.claude/protocol.json` with the wrap when it changed.
 
 **A project whose scripts predate the gate** (`grep -c init-ceiling .claude/scripts/check-payload-budget.py` prints 0 — the start hook will have reported template drift) runs this step without `--strict --ratchet`, reports the size, and says in the report that the gate arrives with the template sync (`MIGRATION.md` §6d). Do not sync mid-wrap.
@@ -173,7 +187,7 @@ Measures what the next session will load — per track in a multi-track repo (th
 
 `git status` to confirm what changed. Stage **explicit paths** — never `git add -A` / `git add .`:
 
-- `docs/CURRENT_STATE.md`, `docs/HANDOFF_LOG.md`, `docs/SESSION_LEDGER.md`, `docs/SESSION_LEDGER_CLOSED.md` and `docs/LESSONS_QUEUE.md` (if they changed), `docs/CODEBASE_INDEX.md` (if updated), `ROADMAP.md` (if the spine changed), `.claude/protocol.json` (if Step 3b lowered a ceiling)
+- `docs/CURRENT_STATE.md`, `docs/HANDOFF_LOG.md`, `docs/SESSION_LEDGER.md`, `docs/SESSION_LEDGER_CLOSED.md`, `docs/LESSONS_QUEUE.md` and `docs/CURRENT_STATE_ARCHIVE.md` (if they changed — the archive always together with CURRENT_STATE, or the moved facts are in neither commit), `docs/CODEBASE_INDEX.md` (if updated), `ROADMAP.md` (if the spine changed), `.claude/protocol.json` (if Step 3b lowered a ceiling)
 - Any other files the user confirmed should be committed — in a multi-track repo, only files inside your owned paths or the shared paths.
 
 Commit message: `Session: <one-line summary>` — multi-track: `Session (<track>): <summary>`.
@@ -214,4 +228,4 @@ If a push was made, both must match; if they differ, the push didn't land — re
 
 ## After `/end` — the mini-wrap rule
 
-Work regularly continues after a completed `/end`. It must close with a **mini-wrap**: disposition/append ledger lines → ONE delta-only handoff line → CURRENT_STATE only if NEXT ACTION or build status changed → `Session followup:` commit, push per policy, clean tree. Never a second full re-summary — that is how work gets recorded twice.
+Work regularly continues after a completed `/end`. It must close with a **mini-wrap**: disposition/append ledger lines → ONE delta-only handoff line → CURRENT_STATE only if NEXT ACTION or build status changed (multi-track: then `state-archive.py --apply`) → `Session followup:` commit, push per policy, clean tree. Never a second full re-summary — that is how work gets recorded twice.

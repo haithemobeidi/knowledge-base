@@ -29,7 +29,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from protocol_config import load_config, multi_track, project_dir, track_of_path  # noqa: E402
+from protocol_config import load_config, multi_track, project_dir, shared_owner, track_of_path  # noqa: E402
 
 # Windows consoles default to a legacy code page (cp1252 here), and every
 # document this toolchain prints is full of arrows, em dashes and smart
@@ -96,8 +96,12 @@ def main() -> None:
             if len(groups[key]) > 12:
                 print(f"      … and {len(groups[key]) - 12} more")
         if multi_track(cfg) and any(k == "shared" for k in groups):
-            print("\n  ⚠️  A shared path changed — that needs a ledger line tagged →all or →<other track>")
-            print("      saying what changed and what the other side must do.")
+            owners = sorted({o for rel in groups["shared"] if (o := shared_owner(cfg, rel))})
+            print("\n  ⚠️  A shared path changed. If another track must ACT on it (rebuild, redeploy, migrate),")
+            print("      a ledger line tagged for exactly those tracks, by name (→desktop/ios) — not →all.")
+            print("      If nobody must act, it is a Shared services fact in CURRENT_STATE, stamped — not an item.")
+            print("      An open problem found there gets ONE owner: "
+                  + (", ".join(owners) + " (shared_owner)." if owners else "the track that will fix it."))
 
     print("\nStatus: <from check_command at Step 0c — this script will not guess it>")
     print("Paste the above into the wrap as facts; write the judgement yourself.")

@@ -1,6 +1,6 @@
 # Knowledge Base — Current State
 
-_Last updated: 2026-11-12 01:50_
+_Last updated: 2026-11-18_
 
 > **Deliberately minimal.** This repo is a reference library and the home of the
 > project template, not an app — so it carries two documents and no machinery:
@@ -20,7 +20,7 @@ _Last updated: 2026-11-12 01:50_
 
 ## 📍 NEXT ACTION
 
-**Hear back on the first live Checkpoint session after its 2026-11-12 sync** (Open loops, first item): did it run the `--track` load command after the track was named, before any other read or edit? That is the one part of the 2026-11-12 template that was never proven. If it did, nothing is owed here; if it did not, tighten the directive in `session-start-context.py`. Other projects pick up the template in their own sessions — the user says "integrate the protocol" there — never from here.
+**Checkpoint syncs to the 2026-11-18 template and does its one-time cleanup, in its own session** (`MIGRATION.md` §6e: tag per-track bullets → `state-archive.py --apply` → `shared_owner` → retag `→all` items → park what waits on an event → the gate passes with `--ratchet`). Two parts of it are the user's rulings, not work: which track owns the shared paths (`shared_owner`), and dispositions of one track's items made by another. Then hear back on its first fresh session (§6e's three checks). The 2026-11-12 question is answered: the first fresh Checkpoint session (2026-11-12 21:37) ran `--track social` as its very first command, followed the PAGE line and reported its payload. Other projects pick up the template in their own sessions — the user says "integrate the protocol" there — never from here.
 
 ## Template rollout
 
@@ -28,10 +28,10 @@ The template is the KB's real deliverable. This table is what "where do we stand
 
 | Project | Protocol | Synced to template | Notes |
 |---|---|---|---|
-| `claude-project-template` | **v2**; load by track, the `/end` budget gate and the lessons queue since 2026-11-12 (`23dc02b`) | — | canonical |
-| Playmoir / Checkpoint | **v2** (migrated 2026-09-22) | **yes** — synced and adopted 2026-11-12 (its `3975110b`) | 5 tracks. Per-track start payload 34K–43K (was 76.8K for every session), each with a ceiling; 113 open ledger items after 11 lessons moved to its queue. Still 137–171% of budget: ~15K of shared CURRENT_STATE every track loads + 42 `→all` items — a triage sitting with the user |
-| BuddySystem | **v2** (bootstrapped 2026-10-02) | behind — still on the pre-2026-10-20 single hook wiring | 3 tracks; the only other project whose session start changes with the 2026-11-12 template. Inside budget on a copy (≤42%) |
-| Cove, Cove-ACS-Expert, Zendesk-Copilot, armada-astra2, final-fantasy-resonance-ultrawide | v2, single track | behind the 2026-11-12 template | start payload unchanged by it (verified byte-identical on Cove, Zendesk-Copilot, armada-astra2); they gain the gate + lessons queue |
+| `claude-project-template` | **v2**; load by track, the `/end` budget gate and the lessons queue since 2026-11-12 (`23dc02b`); shared-state exit, one owner per item, parked items since 2026-11-18 | — | canonical |
+| Playmoir / Checkpoint | **v2** (migrated 2026-09-22) | synced to 2026-11-12 (its `3975110b`); **behind 2026-11-18** — its cleanup session (`checkpoint-fd`) takes it | 5 tracks at 140–173% of budget on 2026-11-18 (desktop 43,340 · android 41,835 · ios 34,975 · steamos 35,734 · social 40,944), each just under its ceiling. Rehearsal of §6e on a copy with simulated dispositions: 22,629–32,667 (ios and steamos inside the budget) |
+| BuddySystem | **v2** (bootstrapped 2026-10-02) | behind — still on the pre-2026-10-20 single hook wiring | 3 tracks; inside budget on a copy (≤42%). Its CURRENT_STATE is 2,356 chars of tables, so the 2026-11-18 shared cap has nothing to do there; 7 of its 10 open items are `→all` (only new ones are stopped) |
+| Cove, Cove-ACS-Expert, Zendesk-Copilot, armada-astra2, final-fantasy-resonance-ultrawide | v2, single track | behind the 2026-11-12 template | start payload unchanged by it and by 2026-11-18 (verified byte-identical on Cove, Zendesk-Copilot, armada-astra2, Tagsmith, Interview-Prep); they gain the gate + lessons queue + parking |
 | Interview-Prep, Stash, Texsmith, Nuveen-Reporting, Tagsmith, armada-odin3 | v1, single track | behind (the last three also predate the 2026-10-20 parts wiring) | same: nothing about their start changes |
 | TrainerKit, CLI-LLM-Hub, D4-Optimizer, MPV-Cinema, namesmith | pre-layering (own root PROTOCOL.md) | never installed | migration per `MIGRATION.md` §1–6 |
 
@@ -79,13 +79,27 @@ adoption (`--adopt` alone for the first hop). `PROTOCOL.md` #10 and "Integrate
 the protocol", `DESIGN.md` "Found after shipping … (2026-11-12)", `MIGRATION.md`
 §6d, template `README.md` "Rolling out a template change".
 
+**Shared state with an exit, one owner, parked items (2026-11-18).** Answers
+Checkpoint's D-106 second round: the ceilings held, nothing shrank. A
+CURRENT_STATE bullet tagged `- →<track>` loads only for that track; the
+untagged shared bullets are capped (`state.shared_max_chars`, 5,000) and
+`state-archive.py` moves the oldest to `docs/CURRENT_STATE_ARCHIVE.md`;
+`shared_owner` in protocol.json; ledger `[~]` parked items counted by the event
+they wait on (`ledger-archive.py --park/--unpark/--parked`); the gate
+(`--track <name>`) stops on a shared block over its cap, a new `→all` item from
+the wrapping track, or a parked item with no event. One parser for all three
+readers (`protocol_config.state_segments`). A sync now adds any script the
+template gained in one run. `PROTOCOL.md` #11, `DESIGN.md` "Found after
+shipping … (2026-11-18)", `MIGRATION.md` §6e.
+
 ## Open loops
 
-- **Unproven in a live session (2026-11-12):** that a session runs the `--track`
-  command once the track is named. Rehearsed on copies and adopted for real on
-  Checkpoint, but the first fresh Checkpoint session had not been observed when
-  this was written. Also unproven: the phrase "integrate the protocol" in a live
-  session.
+- **Unproven in a live session:** the phrase "integrate the protocol" (2026-11-12),
+  and everything from 2026-11-18 (rehearsed on copies of Checkpoint's documents
+  only). The `--track` load is proven: 6 of the 7 working Checkpoint sessions
+  since 2026-11-12 ran it as their first or second command; the seventh, a
+  20-call audit of another session's fix (2026-11-13 01:03), never loaded a
+  track — worth knowing, not worth a rule yet.
 - **Offered to the user 2026-11-12, not asked for — do not start unasked:**
   (a) keep a small working-notes file per session and re-inject it after a
   compaction (11 of 18 Checkpoint sessions auto-compacted; about 1,000
@@ -93,10 +107,13 @@ the protocol", `DESIGN.md` "Found after shipping … (2026-11-12)", `MIGRATION.m
   replaces the full handoff entry the next session needs (recorded in
   Checkpoint's D-106); (c) a "how we do this" line in the handoff for routines;
   (d) one resumed session received 4 of 8 hook parts (seen once, 2026-11-01,
-  cause not found); (e) a triage table for Checkpoint's shared state and `→all`
-  items.
-- **Lesson flagged, not written:** a check that only reports gets ignored; it
-  has to be able to stop the work (Checkpoint's budget, seven weeks).
+  cause not found). ((e), a triage table for Checkpoint's shared state and
+  `→all` items, became the 2026-11-18 template change and Checkpoint's §6e
+  cleanup.)
+- **Lessons flagged, not written:** a check that only reports gets ignored; it
+  has to be able to stop the work (Checkpoint's budget, seven weeks). And
+  2026-11-18: a ceiling stops growth but shrinks nothing — whatever every reader
+  pays for needs an exit, or it only accumulates (`PROTOCOL.md` #11).
 - **Harness repo as a plugin for the buddy** (user asked "can we do that", 2026-10-20;
   plan given, four decisions unanswered): private or public · scripts in the plugin
   vs copied per repo · buddy on `main` under track rules vs his own branch with a

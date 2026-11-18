@@ -52,6 +52,9 @@ Order of operations (each one exists because skipping it once cost real time):
    what a single-track project's would be. Run by the model, the output is
    not a hook string and the 10,000-character cap does not apply; it is paged
    at `payload.page_chars` so one tool result always carries a whole page.
+   Within that load, a CURRENT_STATE bullet tagged `- →<other track>` is left
+   out, and a parked ledger item (`[~]`) is counted by the event it waits on
+   rather than listed (2026-11-18).
 
 All project-specific values come from `.claude/protocol.json` via
 protocol_config.py — never edit this script per project.
@@ -79,6 +82,7 @@ from protocol_config import (  # noqa: E402
     drift_report,
     global_installed,
     id_prefixes,
+    item_targets,
     template_currency,
     load_config,
     payload_limit,
@@ -86,6 +90,7 @@ from protocol_config import (  # noqa: E402
     prefix_map,
     project_dir,
     protocol_version,
+    state_segments,
     template_root,
     track_aliases,
     track_names,
@@ -101,8 +106,11 @@ for _stream in (sys.stdout, sys.stderr):
         pass
 
 ITEM_RE = re.compile(
-    r"^- \[( |x|-)\] ([A-Za-z]{1,4})-(\d+)\s*(?:(?:→|->)\s*[\w-]+\s*)?\((\d{4}-\d{2}-\d{2})"
+    r"^- \[( |x|-|~)\] ([A-Za-z]{1,4})-(\d+)\s*(?:(?:→|->)\s*[\w-]+\s*)?\((\d{4}-\d{2}-\d{2})"
 )
+# A parked item (`[~]`) names the event it waits for on a line of its own:
+# `→ PARKED 2026-11-18 until the iOS prototype works`. The newest such line wins.
+PARKED_RE = re.compile(r"(?:→|->)\s*PARKED\b[^\n]*?\buntil\b\s*(\S.*)", re.IGNORECASE)
 TAG_RE = re.compile(r"(?:→|->)\s*([\w-]+)")
 BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 
@@ -528,37 +536,21 @@ def tag_targets(first_line: str, aliases: dict[str, str]) -> set[str] | None:
     than `item_tag` and fails OPEN: a tag it cannot resolve to declared tracks
     (`→both`, `→backend`), or cannot fully read, means every track
     ("all"). It also finds a tag after a provenance parenthetical that itself
-    contains parentheses, and takes `→android/ios` as both."""
-    s = first_line.lstrip()
-    head = re.match(r"- \[.\] [A-Za-z]{1,4}-\d+\s*", s)
-    if not head:
-        return None
-    rest = s[head.end():]
-    if not re.match(r"(?:→|->)", rest):
-        if not rest.startswith("("):
-            return None
-        close = _matching_paren(rest, 0)
-        if close < 0:
-            return None
-        rest = rest[close + 1:].lstrip()
-        if not re.match(r"(?:→|->)", rest):
-            return None
-    rest = re.sub(r"^(?:→|->)\s*", "", rest)
-    # Longest alias first, so a multi-word alias ("steam deck") is one name.
-    names = sorted(list(aliases.items()) + [("all", "all")], key=lambda kv: -len(kv[0]))
-    targets: set[str] = set()
-    while True:
-        hit = next(
-            ((a, n) for a, n in names if re.match(re.escape(a) + r"(?![\w-])", rest, re.IGNORECASE)), None
-        )
-        if hit is None:
-            return {"all"}
-        targets.add(hit[1])
-        rest = rest[len(hit[0]):]
-        more = re.match(r"\s*(?:[/,+&]|and\b)\s*(?:→|->)?\s*", rest)
-        if not more:
-            return targets
-        rest = rest[more.end():]
+    contains parentheses, and takes `→android/ios` as both. The reading lives
+    in protocol_config.item_targets, which the budget gate uses too, and the
+    tag list in resolve_tags, which also reads a CURRENT_STATE bullet's tag —
+    one definition, so the three cannot drift apart."""
+    return item_targets(first_line, aliases)
+
+
+def parked_event(block: list[str]) -> str:
+    """What a parked item waits for, short enough to group on. "" when the
+    item names nothing — the budget gate stops a wrap on that."""
+    hits = [m.group(1) for m in (PARKED_RE.search(ln) for ln in block) if m]
+    if not hits:
+        return ""
+    event = re.split(r"[.;](?:\s|$)", _clean(hits[-1]))[0]
+    return _cut(event.strip(), 60)
 
 
 def truncate(block_text: str, cap: int) -> tuple[str, bool]:
@@ -703,7 +695,15 @@ def open_ledger_view(text: str, cfg: dict, version: int = 1, gating: dict[str, s
     on: tagged for the track, tagged →all, untagged and written by it, or
     unassigned. Items for other tracks are counted in `hidden`, never shown —
     they are present in THEIR track's view, so the presence rule holds across
-    the views taken together (check-payload-budget.py proves that)."""
+    the views taken together (check-payload-budget.py proves that).
+
+    A PARKED item (`[~]`) is an open loop no session can act on until a named
+    event — a lock lifting, a release. It is counted, grouped by that event,
+    and not listed: on one project most of 122 open items waited on one
+    ruling, and every session paid for their titles. Fails open three times:
+    a parked item the NEXT ACTION cites is listed (and expanded) as usual, a
+    parked `DECIDE:` item is still listed with the user's calls, and on v1
+    (no manifest heading to carry the count) parked items stay listed."""
     gating = gating or {}
     header, blocks = ledger_blocks(text)
     pcfg = cfg.get("payload") or {}
@@ -716,7 +716,8 @@ def open_ledger_view(text: str, cfg: dict, version: int = 1, gating: dict[str, s
     aliases = track_aliases(cfg)
     pmap = prefix_map(cfg)
     open_blocks = [b for b in blocks if b[0].lstrip().startswith("- [ ]")]
-    closed = len(blocks) - len(open_blocks)
+    parked_blocks = [b for b in blocks if b[0].lstrip().startswith("- [~]")]
+    closed = len(blocks) - len(open_blocks) - len(parked_blocks)
 
     groups: dict[str, list[str]] = {}
     order: list[str] = []
@@ -725,8 +726,10 @@ def open_ledger_view(text: str, cfg: dict, version: int = 1, gating: dict[str, s
     expanded: list[str] = []
     hidden = 0
     shown_ids: list[str] = []
-    for b in open_blocks:
+    parked: dict[str, int] = {}
+    for b in open_blocks + parked_blocks:
         first = b[0]
+        is_parked = first.lstrip().startswith("- [~]")
         m = ITEM_RE.match(first.lstrip())
         item_id = f"{m.group(2)}-{m.group(3)}" if m else "?"
         writer = tag = None
@@ -737,10 +740,16 @@ def open_ledger_view(text: str, cfg: dict, version: int = 1, gating: dict[str, s
                 targets = tag_targets(first, aliases)
                 route = targets if targets is not None else ({writer} if writer else {"all"})
                 if "all" not in route and track not in route:
-                    hidden += 1
+                    hidden += 0 if is_parked else 1
                     continue
+        # v1 has no manifest heading to carry the count, so there a parked
+        # item stays listed (marked) rather than vanish without a signal.
+        if is_parked and version >= 2 and item_id not in gating and not is_decide(b):
+            event = parked_event(b) or "(no event named)"
+            parked[event] = parked.get(event, 0) + 1
+            continue
         shown_ids.append(item_id)
-        if m:
+        if m and not is_parked:
             try:
                 d = _dt.date.fromisoformat(m.group(4))
                 if (today - d).days > stale_days:
@@ -757,6 +766,9 @@ def open_ledger_view(text: str, cfg: dict, version: int = 1, gating: dict[str, s
         else:
             text_block, was_cut = truncate("\n".join(b), cap)
         truncated += int(was_cut)
+        if is_parked:
+            head_line, _, rest = text_block.partition("\n")
+            text_block = head_line + "   ⏸ parked" + ("\n" + rest if rest else "")
         if multi_track(cfg):
             if tag == "all":
                 key = "SHARED (→all)"
@@ -794,8 +806,9 @@ def open_ledger_view(text: str, cfg: dict, version: int = 1, gating: dict[str, s
         parts.append(f"\n#### {key} — {len(groups[key])} open\n" + "\n".join(groups[key]))
     return {
         "text": "\n".join(parts),
-        "shown": len(open_blocks) - hidden,
+        "shown": len(shown_ids),
         "hidden": hidden,
+        "parked": parked,
         "ids": shown_ids,
         "decide": len(groups.get(DECIDE_KEY, [])),
         "open": len(open_blocks),
@@ -1205,54 +1218,43 @@ def resolve_track(cfg: dict, said: str) -> str | None:
     return track_aliases(cfg).get(said.strip().lower())
 
 
-def scope_state(text: str, cfg: dict, track: str) -> tuple[str, list[str], bool]:
+def scope_state(text: str, cfg: dict, track: str) -> tuple[str, list[str], bool, int]:
     """CURRENT_STATE for one track: everything except the OTHER tracks' NEXT
-    ACTION sections. Returns (text, names of the tracks whose section was left
-    out, whether this track's own section was found).
+    ACTION sections and the bullets tagged for other tracks only. Returns
+    (text, names of the tracks whose section was left out, whether this
+    track's own section was found, how many other-track bullets were left out).
 
     A section runs from a `# ` or `## ` heading to the next one. A NEXT ACTION
     heading belongs to a track only when the track's name or an alias is its
     LABEL — the first words after "NEXT ACTION" (`## 📍 NEXT ACTION — desktop`).
     A track word further along does not count: "NEXT ACTION — all tracks: fix
-    the site copy" is shared, although "site" is an alias. Everything that is
-    not clearly another track's section stays: the failure this must never
-    have is hiding a section from the session that needed it. Headings inside
-    a fenced block or an HTML comment are not headings (the template's own
-    multi-track example sits in a comment)."""
-    # Longest alias first, so "steam deck" wins over "deck".
-    aliases = sorted(track_aliases(cfg).items(), key=lambda kv: -len(kv[0]))
+    the site copy" is shared, although "site" is an alias. In every other
+    section a top-level bullet that STARTS with a tag (`- →android **Android
+    1.3.0 — in review** …`) is that track's; untagged bullets are everyone's.
+    Everything that is not clearly another track's stays: the failure this must
+    never have is hiding a line from the session that needed it. Headings and
+    bullets inside a fenced block or an HTML comment do not count (the
+    template's own multi-track example sits in a comment). The parsing is
+    protocol_config.state_segments, shared with state-archive.py and the
+    budget gate."""
     out: list[str] = []
     omitted: list[str] = []
     found = False
-    keep = True
-    fenced = comment = False
-    for ln in text.splitlines():
-        s = ln.strip()
-        if s.startswith("```") or s.startswith("~~~"):
-            fenced = not fenced
-        elif not fenced:
-            if comment:
-                comment = "-->" not in s
+    dropped = 0
+    for seg in state_segments(text, cfg):
+        if seg["kind"] == "next":
+            if seg["owner"] == track:
+                found = True
             else:
-                if ln.startswith("## ") or ln.startswith("# "):
-                    keep = True
-                    low = ln.lower()
-                    if ln.startswith("## ") and "next action" in low:
-                        label = re.sub(r"^[^a-z0-9]+", "", low.split("next action", 1)[1])
-                        owner = next(
-                            (n for a, n in aliases if re.match(re.escape(a) + r"(?![\w-])", label)), None
-                        )
-                        if owner == track:
-                            found = True
-                        elif owner is not None:
-                            keep = False
-                            if owner not in omitted:
-                                omitted.append(owner)
-                if "<!--" in s and "-->" not in s[s.rindex("<!--"):]:
-                    comment = True
-        if keep:
-            out.append(ln)
-    return "\n".join(out), omitted, found
+                if seg["owner"] not in omitted:
+                    omitted.append(seg["owner"])
+                continue
+        targets = seg["targets"]
+        if seg["bullet"] and targets is not None and "all" not in targets and track not in targets:
+            dropped += 1
+            continue
+        out.extend(seg["lines"])
+    return "\n".join(out), omitted, found, dropped
 
 
 def track_handoff(entries: list[list[str]], cfg: dict, name: str) -> tuple[list[str] | None, bool]:
@@ -1367,10 +1369,15 @@ def build_docs(proj: str, cfg: dict, version: int, track: str | None = None) -> 
         except OSError:
             state_text = ""
     if state_text and track:
-        state_text, omitted, found = scope_state(state_text, cfg, track)
+        state_text, omitted, found, dropped = scope_state(state_text, cfg, track)
+        archived = (pathlib.Path(proj) / "docs" / "CURRENT_STATE_ARCHIVE.md").exists()
         scope_note = (
             (f"_NEXT ACTION sections of other tracks are not shown here ({', '.join(omitted)}); they are in "
              "the file._\n" if omitted else "")
+            + (f"_{dropped} bullet(s) tagged for other tracks are not shown; they are in the file._\n"
+               if dropped else "")
+            + ("_Older shared facts were moved to `docs/CURRENT_STATE_ARCHIVE.md` by `state-archive.py` — "
+               "never loaded; grep it when a topic comes up._\n" if archived else "")
             + ("" if found else
                f"⚠️ **No `## … NEXT ACTION — {track}` section found in this file.** Say so in the status "
                "report: this track has no recorded next action.\n")
@@ -1426,6 +1433,16 @@ def build_docs(proj: str, cfg: dict, version: int, track: str | None = None) -> 
                     "name them in the status report.** "
                     if ledger_info["decide"] else ""
                 )
+                waits = sorted(ledger_info["parked"].items(), key=lambda kv: -kv[1])
+                if waits:
+                    calls += (
+                        f"{sum(c for _, c in waits)} parked item(s) {'for this track ' if track else ''}are not "
+                        "listed — each waits on an event: "
+                        + " · ".join(f"{e if e.startswith('(') else 'until ' + e} ({c})" for e, c in waits[:6])
+                        + (" …" if len(waits) > 6 else "")
+                        + ". If one of those has happened, unpark its items "
+                        "(`python .claude/scripts/ledger-archive.py --parked` lists them). "
+                    )
                 head = (
                     f"\n### docs/SESSION_LEDGER.md — {scope}"
                     f"{ledger_info['closed']} closed omitted — history)\n"

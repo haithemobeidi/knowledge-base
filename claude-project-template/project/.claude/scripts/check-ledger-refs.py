@@ -69,14 +69,16 @@ for _stream in (sys.stdout, sys.stderr):
 
 # Anchored to the line start: only a real ledger row defines an ID's status.
 # An ID merely mentioned inside another item's prose must never set status.
-STATUS_RE = re.compile(r"^- \[( |x|-)\]\s+([A-Za-z]{1,4}-\d+)\b", re.MULTILINE)
-STATUS = {" ": "open", "x": "struck", "-": "struck"}
+# `[~]` is PARKED: still an open loop (waiting on a named event), so citing it
+# is not the copy-forward failure this script looks for.
+STATUS_RE = re.compile(r"^- \[( |x|-|~)\]\s+([A-Za-z]{1,4}-\d+)\b", re.MULTILINE)
+STATUS = {" ": "open", "x": "struck", "-": "struck", "~": "parked"}
 
 SCANNED = ("docs/CURRENT_STATE.md", "ROADMAP.md")
 
 
 def ledger_status(proj: pathlib.Path) -> dict[str, str]:
-    """ID → open | struck, from the live ledger AND the closed archive."""
+    """ID → open | parked | struck, from the live ledger AND the closed archive."""
     out: dict[str, str] = {}
     for rel in ("docs/SESSION_LEDGER.md", "docs/SESSION_LEDGER_CLOSED.md"):
         p = proj / rel
@@ -89,7 +91,7 @@ def ledger_status(proj: pathlib.Path) -> dict[str, str]:
         for mark, item_id in STATUS_RE.findall(text):
             # An open line always wins: a concurrent session may have reopened
             # an item whose earlier closed copy is still in the archive.
-            if out.get(item_id) != "open":
+            if out.get(item_id) not in ("open", "parked"):
                 out[item_id] = STATUS[mark]
     return out
 
@@ -122,7 +124,7 @@ def main() -> None:
     pat = re.compile(r"\b(?:" + "|".join(id_prefixes(cfg)) + r")-\d+\b")
     aliases = track_aliases(cfg)
     findings: list[dict] = []
-    counts = {"open": 0, "struck": 0, "absent": 0}
+    counts = {"open": 0, "parked": 0, "struck": 0, "absent": 0}
 
     for rel in SCANNED:
         path = proj / rel
@@ -156,7 +158,8 @@ def main() -> None:
         sys.exit(1 if ("--strict" in sys.argv and findings) else 0)
 
     print(f"Ledger references in {', '.join(SCANNED)}: "
-          f"{counts['open']} open, {counts['struck']} struck, {counts['absent']} not in the ledger")
+          f"{counts['open']} open, " + (f"{counts['parked']} parked, " if counts["parked"] else "")
+          + f"{counts['struck']} struck, {counts['absent']} not in the ledger")
     print("  'not in the ledger' is usually a moved closed line cited as history — informational.")
     if not findings:
         print("\nNo struck item is cited. Nothing to reconcile.")

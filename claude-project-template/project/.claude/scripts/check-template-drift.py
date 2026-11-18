@@ -86,6 +86,19 @@ def adopt(proj: pathlib.Path, tmpl: pathlib.Path) -> None:
     - anything left for a person to decide is printed as the exact command."""
     todo: list[str] = []
     did = False
+    # A script the template GAINED. `--sync` is run by the project's OLD copy
+    # of this file, whose list of managed files predates the new one, so it
+    # copies everything it knows about and hands over to the new copy with
+    # `--adopt` — which is here. Without this, state-archive.py (2026-11-18)
+    # arrived only on a second `--sync`, and the adoption below could not see
+    # it to run. Missing files only: a file that exists is --sync's to replace.
+    for rel in TEMPLATE_MANAGED:
+        src, dst = tmpl / "project" / rel, proj / rel
+        if src.exists() and not dst.exists():
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(src, dst)
+            did = True
+            print(f"added   {rel} (new in the template)")
     queue = proj / "docs" / "LESSONS_QUEUE.md"
     src = tmpl / "project" / "docs" / "LESSONS_QUEUE.md"
     if (proj / "docs").is_dir() and not queue.exists() and src.exists():
@@ -115,6 +128,14 @@ def adopt(proj: pathlib.Path, tmpl: pathlib.Path) -> None:
         todo.append(
             "Lesson reminders are sitting on the ledger as open items (" + ids + "). Move them to the "
             "lessons queue:\n      python .claude/scripts/ledger-archive.py --lessons --apply"
+        )
+    state = _run(proj, "state-archive.py")
+    if "would move" in state:
+        todo.append(
+            "CURRENT_STATE's shared block is over its cap (protocol.json → state.shared_max_chars), and the "
+            "next /end gate stops on that. First tag each bullet that is ONE track's state — Build status and "
+            "Shipped rows above all — as `- →<track> …`, so only that track loads it; then move the oldest "
+            "of the rest out (it prints what it moves first):\n      python .claude/scripts/state-archive.py --apply"
         )
     if todo:
         print("\nLeft for you (nothing below was done):")

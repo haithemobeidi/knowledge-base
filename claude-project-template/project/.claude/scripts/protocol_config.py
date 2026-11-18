@@ -140,6 +140,21 @@ DEFAULTS: dict = {
         # handoff entry or a spine cell must stay resolvable forever.
         "move_closed_after_days": 7,
     },
+    # CURRENT_STATE in a multi-track v2 project. Everything outside the NEXT
+    # ACTION sections is loaded by every track's session, and no track may
+    # prune a line another track wrote — so nothing ever left (2026-11-18: the
+    # shared block was 15,600–18,500 chars of every track's 25,000). A bullet
+    # tagged `- →<track> …` is loaded only for that track; the UNTAGGED bullets
+    # may total at most shared_max_chars, and state-archive.py moves the oldest
+    # (by the newest date in each) to docs/CURRENT_STATE_ARCHIVE.md at /end.
+    # Never moved or counted: blocker sections, and the never_move sections.
+    "state": {
+        "shared_max_chars": 5000,
+        # Sections (heading substring, any case) whose bullets are each
+        # track's status of record. Neither counted nor moved; a row that is
+        # one track's is tagged `- →<track>` so only that track loads it.
+        "never_move": ["shipped", "build status"],
+    },
     # Parallel tracks. [] = single track (IDs are L-N, no ownership rules).
     # /end Step 0d (check-file-caps.py): line caps on the code files a session
     # touched, and the same-basename twin check for new files. Extensions are
@@ -160,9 +175,15 @@ DEFAULTS: dict = {
     # track whose work never touches the build — a marketing kit, docs — sets
     # "" and skips the repo-wide check; absent = the repo-wide check_command).
     "tracks": [],
-    # Paths every track may edit; changes there are announced with a ledger
-    # line tagged →all or →<other track>.
+    # Paths every track may edit. A change there that another track must act
+    # on gets a ledger line tagged for exactly those tracks, by name.
     "shared_paths": [],
+    # Who owns an open problem found on a shared path (a server advisory, a
+    # shared script's bug): a track name for all of them, or {"apps/server/":
+    # "desktop", …} by path. "" = the track that writes the item. One owner,
+    # never →all: 40 of 122 open items on one project were →all because a
+    # shared path had no owner, and each one rode in all five tracks' payloads.
+    "shared_owner": "",
 }
 
 
@@ -189,7 +210,7 @@ def load_config(proj: str | None = None) -> tuple[dict, bool]:
         for key, value in raw.items():
             if key.startswith("$"):
                 continue  # $comment keys
-            if key in ("ledger", "file_caps", "payload") and isinstance(value, dict):
+            if key in ("ledger", "file_caps", "payload", "state") and isinstance(value, dict):
                 cfg[key].update({k: v for k, v in value.items() if not k.startswith("$")})
             else:
                 cfg[key] = value
@@ -309,6 +330,262 @@ def track_of_path(cfg: dict, rel_posix: str) -> tuple[str, str | None]:
     return "unowned", None
 
 
+def shared_owner(cfg: dict, rel_posix: str = "") -> str | None:
+    """The track that owns an open problem on a shared path (`shared_owner`):
+    the one name, or the longest matching path prefix. None = not declared."""
+    raw = cfg.get("shared_owner")
+    aliases = track_aliases(cfg)
+    if isinstance(raw, str):
+        return aliases.get(raw.strip().lower())
+    if isinstance(raw, dict):
+        rel = rel_posix.replace("\\", "/")
+        hits = sorted(((_norm_prefix(str(p)), str(t)) for p, t in raw.items() if not str(p).startswith("$")),
+                      key=lambda pt: -len(pt[0]))
+        for prefix, name in hits:
+            if not rel or rel.startswith(prefix):
+                return aliases.get(name.strip().lower())
+    return None
+
+
+# --- Tags: who a ledger item or a CURRENT_STATE bullet is for ------------------
+
+def resolve_tags(rest: str, aliases: dict[str, str]) -> set[str]:
+    """The track names in a tag list at the start of `rest` (the text right
+    after the arrow): `desktop`, `android/ios`, `desktop, steamos`, `all`.
+
+    Fails OPEN: a word that is not a declared track name or alias (`both`,
+    `backend`) makes the whole tag "all", because a misread tag must never
+    hide a line from the track it was written for. Longest alias first, so a
+    multi-word alias ("steam deck") is one name."""
+    names = sorted(list(aliases.items()) + [("all", "all")], key=lambda kv: -len(kv[0]))
+    targets: set[str] = set()
+    while True:
+        hit = next(
+            ((a, n) for a, n in names if re.match(re.escape(a) + r"(?![\w-])", rest, re.IGNORECASE)), None
+        )
+        if hit is None:
+            return {"all"}
+        targets.add(hit[1])
+        rest = rest[len(hit[0]):]
+        more = re.match(r"\s*(?:[/,+&]|and\b)\s*(?:→|->)?\s*", rest)
+        if not more:
+            return targets
+        rest = rest[more.end():]
+
+
+def item_targets(first_line: str, aliases: dict[str, str]) -> set[str] | None:
+    """Who a ledger item is FOR, from its first line: the `→` tag right after
+    the ID, or right after the provenance parenthetical (which may itself
+    contain parentheses). None = no tag (the writer's track acts on it). The
+    start hook scopes by it and the budget gate checks it, so both read it
+    here."""
+    s = first_line.lstrip()
+    head = re.match(r"- \[.\] [A-Za-z]{1,4}-\d+\s*", s)
+    if not head:
+        return None
+    rest = s[head.end():]
+    if not re.match(r"(?:→|->)", rest):
+        if not rest.startswith("("):
+            return None
+        depth = 0
+        for k, ch in enumerate(rest):
+            depth += ch == "("
+            depth -= ch == ")"
+            if depth == 0:
+                rest = rest[k + 1:].lstrip()
+                break
+        else:
+            return None
+        if not re.match(r"(?:→|->)", rest):
+            return None
+    return resolve_tags(re.sub(r"^(?:→|->)\s*", "", rest), aliases)
+
+
+# --- The shared block of CURRENT_STATE (multi-track) ---------------------------
+# One parser for the start hook (which bullets a track loads), state-archive.py
+# (which bullets may move) and the budget gate (how big the shared block is).
+# Three readers with three definitions of "a bullet" would drift apart, and the
+# drift would show up as a fact one track loads and the archive never moves.
+
+DATE_RE = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
+
+
+def next_action_owner(heading: str, cfg: dict) -> str | None:
+    """The track whose `## … NEXT ACTION — <track>` section this heading opens:
+    the name or an alias as the LABEL, the first words after "NEXT ACTION". A
+    track word further along does not count ("NEXT ACTION — all tracks: fix
+    the site copy" is shared although "site" is an alias). None for any other
+    heading."""
+    low = heading.lower()
+    if not heading.startswith("## ") or "next action" not in low:
+        return None
+    label = re.sub(r"^[^a-z0-9]+", "", low.split("next action", 1)[1])
+    for a, n in sorted(track_aliases(cfg).items(), key=lambda kv: -len(kv[0])):
+        if re.match(re.escape(a) + r"(?![\w-])", label):
+            return n
+    return None
+
+
+# A line indented less than a list item's content that starts a block of its
+# own: a list item of any kind, a quote, a table row, a thematic break, a
+# heading, a fence, a comment. Markdown renders it as a new block, so it ends
+# the bullet above it — reading it as that bullet's continuation would scope
+# it to the bullet's track and hide it from every other one.
+BLOCK_START = re.compile(
+    r"^ ?(?:[-*+](?:\s|$)|\d{1,9}[.)](?:\s|$)|>|\||#|```|~~~|<!--|(?:-\s*){3,}$|(?:\*\s*){3,}$|(?:_\s*){3,}$)"
+)
+
+
+def _opens_comment(s: str) -> bool:
+    return "<!--" in s and "-->" not in s[s.rindex("<!--"):]
+
+
+def bullet_end(lines: list[str], i: int) -> int:
+    """Index one past the last line of the top-level bullet starting at `i`.
+
+    Part of the bullet: a line indented two or more spaces (or a tab) — its
+    content or a nested list — also after blank lines; a plain line right
+    under it with no blank between (lazy continuation); and everything from an
+    indented fence or comment opener to its closer, wherever the closer sits
+    (so a fence inside a bullet never flips the parity of the document's
+    fences). Not part of it: a line that starts a block of its own
+    (BLOCK_START), or anything after a blank line that is not indented."""
+    n = len(lines)
+    fenced = False
+    comment = _opens_comment(lines[i].strip())
+    j = i + 1
+    while j < n:
+        ln = lines[j]
+        s = ln.strip()
+        if fenced:
+            fenced = not s.startswith(("```", "~~~"))
+            j += 1
+            continue
+        if comment:
+            comment = "-->" not in s
+            j += 1
+            continue
+        if not s:
+            k = j
+            while k < n and not lines[k].strip():
+                k += 1
+            if k < n and lines[k].startswith(("  ", "\t")):
+                j = k
+                continue
+            break
+        if ln.startswith(("  ", "\t")):
+            if s.startswith(("```", "~~~")):
+                fenced = True
+            elif _opens_comment(s):
+                comment = True
+            j += 1
+            continue
+        if BLOCK_START.match(ln):
+            break
+        comment = _opens_comment(s)
+        j += 1
+    return j
+
+
+def state_segments(text: str, cfg: dict) -> list[dict]:
+    """CURRENT_STATE as segments, in order, joining back to the text exactly:
+    {"lines", "section", "kind", "bullet", "targets", "newest"}.
+
+    kind: "next" (a track's NEXT ACTION section; "owner" says whose),
+    "blocker" (a section whose heading says blocker), "record" (a section
+    whose heading names one of `state.never_move` — Shipped, Build status:
+    each track's current status of record), or "shared" (everything else,
+    the preamble included). A segment is either one top-level bullet of a
+    section other than NEXT ACTION ("bullet": True) or a run of other lines.
+    targets: None for an untagged bullet, else resolve_tags of its `→` tag.
+    newest: the latest ISO date in a bullet that is not in the future, or ""
+    when it has none. Fenced blocks and HTML comments are never bullets and
+    never headings; a heading line that opens a comment is still a heading."""
+    lines = text.split("\n")
+    aliases = track_aliases(cfg)
+    never_move = [str(w).lower() for w in (cfg.get("state") or {}).get("never_move", []) if str(w).strip()]
+    segs: list[dict] = []
+    section, kind, owner = "", "shared", None
+    fenced = comment = False
+    run: list[str] = []
+
+    def flush() -> None:
+        if run:
+            segs.append({"lines": list(run), "section": section, "kind": kind, "owner": owner,
+                         "bullet": False, "targets": None, "newest": ""})
+            run.clear()
+
+    i = 0
+    while i < len(lines):
+        ln = lines[i]
+        s = ln.strip()
+        if fenced or comment:
+            if fenced and s.startswith(("```", "~~~")):
+                fenced = False
+            elif comment and "-->" in s:
+                comment = False
+            run.append(ln)
+            i += 1
+            continue
+        if s.startswith(("```", "~~~")):
+            fenced = True
+            run.append(ln)
+            i += 1
+            continue
+        if ln.startswith(("# ", "## ")):
+            flush()
+            section = ln.lstrip("#").strip()
+            owner = next_action_owner(ln, cfg)
+            low = ln.lower()
+            kind = ("next" if owner else "blocker" if "blocker" in low
+                    else "record" if any(w in low for w in never_move) else "shared")
+            comment = _opens_comment(s)
+            run.append(ln)
+            i += 1
+            continue
+        if _opens_comment(s):
+            comment = True
+            run.append(ln)
+            i += 1
+            continue
+        if kind != "next" and ln.startswith("- "):
+            flush()
+            j = bullet_end(lines, i)
+            body = lines[i:j]
+            tag = re.match(r"- (?:→|->)\s*", ln)
+            # A date in the future ("deadline 2027-01-15") is not when the
+            # fact was written; counting it would make the bullet immortal.
+            today = _dt.date.today().isoformat()
+            dates = [d for d in DATE_RE.findall("\n".join(body)) if d <= today]
+            segs.append({"lines": body, "section": section, "kind": kind, "owner": owner, "bullet": True,
+                         "targets": resolve_tags(ln[tag.end():], aliases) if tag else None,
+                         "newest": max(dates) if dates else ""})
+            i = j
+            continue
+        run.append(ln)
+        i += 1
+    flush()
+    return segs
+
+
+def capped_bullets(segs: list[dict]) -> list[dict]:
+    """The bullets the cap counts and state-archive.py may move: untagged (or
+    tagged `→all`) bullets of the "shared" sections — the ones that only ever
+    accumulate. Per-track bullets cost only their track. Exempt: blocker
+    sections (a live blocker must never age out of view) and "record"
+    sections (Shipped, Build status): a track's row there is old because it is
+    stable, not because it is stale, and moving it by age would take each
+    track's current status out of every session, its own included (found in
+    review, 2026-11-18). Those rows are one per track and rewritten in place;
+    the way to stop every track paying for them is the tag."""
+    return [s for s in segs if s["bullet"] and s["kind"] == "shared"
+            and (s["targets"] is None or "all" in s["targets"])]
+
+
+def seg_chars(seg: dict) -> int:
+    return len("\n".join(seg["lines"])) + 1
+
+
 def skip_prefixes(cfg: dict) -> tuple[str, ...]:
     extra = tuple(_norm_prefix(p) for p in cfg.get("index_skip_prefixes") or [])
     return DEFAULT_SKIP_PREFIXES + extra
@@ -416,6 +693,7 @@ TEMPLATE_MANAGED = (
     ".claude/scripts/check-ledger-refs.py",
     ".claude/scripts/migrate-docs-v2.py",
     ".claude/scripts/ledger-archive.py",
+    ".claude/scripts/state-archive.py",
     ".claude/scripts/end-derive.py",
     ".claude/scripts/check-template-drift.py",
     ".claude/agents/planner.md",

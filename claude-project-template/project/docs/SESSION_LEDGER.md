@@ -60,9 +60,21 @@
 > - **IDs.** Single-track: `L-1, L-2, …`. **Multi-track:** each track mints with its
 >   own prefix and its own counter — `D-1, M-1` — so two sessions can append at
 >   once without colliding. The prefix says who WROTE it; a tag right after the ID
->   says who ACTS on it: `→mobile`, `→desktop`, `→all`. No tag = the writer's track.
->   A session loads only the items its own track acts on, so `→all` puts a line in
->   EVERY track's payload: use it when every track must act, not for visibility.
+>   says who ACTS on it: `→mobile`, `→desktop`, `→desktop/mobile`. No tag = the
+>   writer's track. A session loads only the items its own track acts on, so a tag
+>   for every track puts a line in EVERY track's payload. **One owner:** a problem
+>   on a shared path goes to `shared_owner` (protocol.json) or the track that will
+>   fix it; work several tracks must each do names them. New items are never
+>   tagged `→all` (the `/end` gate stops it — naming every track is allowed, and
+>   has to be deliberate); a shared change nobody must act on is a stamped fact in
+>   CURRENT_STATE, not an item.
+>
+> - **PARKED `[~]`:** an open loop no session can act on until a named event (a
+>   lock lifting, a release). Add `→ PARKED <date> until <event>` on its own line
+>   — `ledger-archive.py --park <IDs> --until "<event>" --apply` writes both.
+>   Session start counts parked items by event instead of listing them; when the
+>   event happens, unpark them (`--unpark`). A parked item the NEXT ACTION cites,
+>   or a `DECIDE:` item, is still listed. One with no event stops the wrap.
 
 <!-- Items start here. The first line is the title; continuation lines are body.
 
@@ -77,5 +89,7 @@ Single-track:
 Multi-track:
 - [ ] D-1 (2026-09-08) SYNC STATUS FLICKERS DURING A FULL COPY-UP — done when the hub mark reads "Backing up" once for the whole run.
 - [ ] D-2 →mobile (2026-09-08) SERVER v134 IS LIVE WITH THE WIPE STAMP (migration 0030) — the phone must re-sync before testing wipe-aftermath copy.
-- [ ] M-1 →all (2026-09-08) `Entry.milestone` IS NOW NULLABLE IN packages/core — rebuild core and re-run the drift guard before the next commit on either track.
+- [ ] M-1 →desktop (2026-09-08) `Entry.milestone` IS NOW NULLABLE IN packages/core — rebuild core and re-run the drift guard before the next desktop commit.
+- [~] D-3 (2026-09-08) **SIGN-OUT CONFIRM STEP ON THE DESKTOP** — waits for the redesign that replaces the account menu.
+  → PARKED 2026-09-12 until the account-menu redesign is approved
 -->
