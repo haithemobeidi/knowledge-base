@@ -45,6 +45,7 @@ It reads the code files THIS session touched (commits since the last wrap + the 
 
 - **Over the hard cap (default 800) → STOP.** Split the file by a coherent concept now, or get an explicit override; never shave lines to pass.
 - **Over the soft cap (default 500), or a new file that shares its name with an existing one → a `[ ]` ledger line per file, right now**, naming the split candidate or the twin (Step 1d will see it). The wrap RECORDS; the split happens at the next quiet point. Do not split during `/end`.
+- **A twin the project repeats by design** (one `routes.js` per feature folder, one folder per post holding copies of the same templates) → not a ledger line: add its pattern to `file_caps.twin_exempt` in `protocol.json` and say so in the handoff, so no later wrap flags it again. A name repeated across clients (desktop's and mobile's own `format.ts`) is never "by design" — that is the twin.
 - The judgement half — is anything duplicated, should anything split — runs once per feature close, not per session (global `PROTOCOL.md` → "Feature close"). The mechanical check is what holds the line between those sittings.
 
 ## Step 1 — Verify pending index updates

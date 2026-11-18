@@ -17,10 +17,16 @@ Checks, on code files only (`file_caps.extensions`):
   - a NEW file whose basename already exists elsewhere in the repo (a cheap
     DRY smell: a second `Format.kt`, a second `helpers.ts`) → flagged, with
     the twin named. Common structural names (index.ts, mod.rs, README.md…)
-    are exempt.
+    are exempt, and so is whatever `file_caps.twin_exempt` names: a layout
+    that repeats a name on purpose — one `routes.js` per feature folder, one
+    folder per social post holding filled copies of the same templates. That
+    is the project's call, not a rule this script guesses at: "same name in a
+    sibling folder" also describes desktop's and mobile's own `format.ts`,
+    which is exactly the twin the check is for. (Checkpoint SO-14: four wraps
+    from 2026-10-21 put by-design repeats on the ledger.)
 
 Config lives in `.claude/protocol.json` → `file_caps` (soft, hard,
-extensions, skip_prefixes); `index_skip_prefixes` and the built-in
+extensions, skip_prefixes, twin_exempt); `index_skip_prefixes` and the built-in
 generated/vendored prefixes are skipped too. Never edit this script per
 project. Silent on git failures (exit 0) — a check that cannot run must not
 block a wrap by accident; it says so instead.
@@ -33,6 +39,7 @@ Usage:
 
 from __future__ import annotations
 
+import fnmatch
 import os
 import pathlib
 import subprocess
@@ -61,6 +68,30 @@ EXEMPT_BASENAMES = {
     "build.gradle.kts", "settings.gradle.kts", "proguard-rules.pro", "AndroidManifest.xml",
     "styles.css", "types.ts", "schema.ts", "constants.ts", "test_contract.py",
 }
+
+
+def twin_exempt(rel: str, patterns: list[str]) -> bool:
+    """True when [rel] matches a `file_caps.twin_exempt` entry: a folder prefix
+    ("docs/posts/"), a bare file name ("routes.js", anywhere), or a path
+    pattern matched segment by segment, so `*` never crosses a "/"
+    ("apps/server/src/*/routes.js")."""
+    name = pathlib.PurePosixPath(rel).name
+    parts = rel.split("/")
+    for pat in patterns:
+        pat = str(pat).strip().replace("\\", "/")
+        if not pat:
+            continue
+        if pat.endswith("/"):
+            if rel.startswith(pat):
+                return True
+        elif "/" not in pat:
+            if fnmatch.fnmatchcase(name, pat):
+                return True
+        else:
+            segs = pat.split("/")
+            if len(segs) == len(parts) and all(fnmatch.fnmatchcase(a, b) for a, b in zip(parts, segs)):
+                return True
+    return False
 
 
 def git(proj: str, *args: str) -> list[str]:
@@ -106,6 +137,8 @@ def main() -> None:
     skips = list(skip_prefixes(cfg)) + [
         p if p.endswith("/") else p + "/" for p in (caps.get("skip_prefixes") or [])
     ]
+    raw = caps.get("twin_exempt") or []
+    by_design = [raw] if isinstance(raw, str) else [p for p in raw if isinstance(p, str)]
 
     if "--all" in sys.argv:
         touched = set(git(proj, "ls-files"))
@@ -146,7 +179,8 @@ def main() -> None:
             by_name.setdefault(pathlib.PurePosixPath(rel).name, []).append(rel)
         for rel in sorted(new):
             name = pathlib.PurePosixPath(rel).name
-            if name in EXEMPT_BASENAMES or pathlib.PurePosixPath(rel).suffix not in exts or skipped(rel):
+            if (name in EXEMPT_BASENAMES or pathlib.PurePosixPath(rel).suffix not in exts
+                    or skipped(rel) or twin_exempt(rel, by_design)):
                 continue
             for other in by_name.get(name, []):
                 if other != rel:

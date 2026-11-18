@@ -51,11 +51,12 @@
     "move_closed_after_days": 7
   },
 
-  "$file_caps": "/end Step 0d (check-file-caps.py) — line caps on the CODE files this session touched (since the last wrap) and a same-basename twin check for new files. soft = flagged and put on the ledger (default 500); hard = the wrap stops (default 800); extensions = what counts as code (defaults cover TS/JS, Kotlin, Rust, Python, Swift, Java, Go, CSS, HTML, Vue, Svelte); skip_prefixes = paths the caps ignore on top of index_skip_prefixes, e.g. design prototypes or vendored code.",
+  "$file_caps": "/end Step 0d (check-file-caps.py) — line caps on the CODE files this session touched (since the last wrap) and a same-basename twin check for new files. soft = flagged and put on the ledger (default 500); hard = the wrap stops (default 800); extensions = what counts as code (defaults cover TS/JS, Kotlin, Rust, Python, Swift, Java, Go, CSS, HTML, Vue, Svelte); skip_prefixes = paths the caps ignore on top of index_skip_prefixes, e.g. design prototypes or vendored code; twin_exempt = names the project repeats BY DESIGN, so a new one is not flagged as a twin — a folder prefix ending in / (\"docs/marketing/posts/\"), a bare file name anywhere (\"routes.js\"), or a path pattern matched segment by segment (\"apps/server/src/*/routes.js\"). Only for a layout that repeats a name on purpose; desktop's and mobile's own format.ts is the twin the check exists for.",
   "file_caps": {
     "soft": 500,
     "hard": 800,
-    "skip_prefixes": []
+    "skip_prefixes": [],
+    "twin_exempt": []
   },
 
   "$tracks": "Parallel tracks — two sessions working on two VERSIONS of the app (e.g. desktop and mobile) in the same checkout on the same branch. Empty = single track (ledger IDs are L-N, no ownership rules). With 2+ tracks: each session declares its track at start, mints IDs with its own prefix (D-1, M-1 — independent counters, so no collisions), edits only its own 'owns' paths plus shared_paths, and the stop hook tolerates the OTHER track's uncommitted files only inside that track's owns. Optional \"aliases\": other words your existing docs use for the track (\"android\", \"phone\") — accepted in →tags and used to match legacy handoff lines. Optional \"check_command\": this track's own /end check (see $check_command). Example: [{\"name\": \"desktop\", \"prefix\": \"D\", \"owns\": [\"apps/desktop/\", \"packages/frontend/\"]}, {\"name\": \"mobile\", \"prefix\": \"M\", \"owns\": [\"platforms/android/\"], \"aliases\": [\"android\", \"phone\"]}]",

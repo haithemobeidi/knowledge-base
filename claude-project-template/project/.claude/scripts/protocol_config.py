@@ -169,6 +169,10 @@ DEFAULTS: dict = {
         # Project-relative prefixes the caps ignore on top of index_skip_prefixes
         # (design prototypes, vendored code).
         "skip_prefixes": [],
+        # Names the project repeats BY DESIGN, so a new one is not a twin. Each
+        # entry is a folder prefix ending in "/", a bare file name (anywhere),
+        # or a path pattern matched segment by segment ("apps/server/src/*/routes.js").
+        "twin_exempt": [],
     },
     # Each: {"name": "desktop", "prefix": "D", "owns": ["apps/desktop/", ...],
     #        "check_command": "pnpm check:desktop"}  (check_command optional: a

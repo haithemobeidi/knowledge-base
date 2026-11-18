@@ -29,7 +29,7 @@ The template is the KB's real deliverable. This table is what "where do we stand
 | Project | Protocol | Synced to template | Notes |
 |---|---|---|---|
 | `claude-project-template` | **v2**; load by track, the `/end` budget gate and the lessons queue since 2026-11-12 (`23dc02b`); shared-state exit, one owner per item, parked items since 2026-11-18 | — | canonical |
-| Playmoir / Checkpoint | **v2** (migrated 2026-09-22) | synced to 2026-11-12 (its `3975110b`); **behind 2026-11-18** — its cleanup session (`checkpoint-fd`) takes it | 5 tracks at 140–173% of budget on 2026-11-18 (desktop 43,340 · android 41,835 · ios 34,975 · steamos 35,734 · social 40,944), each just under its ceiling. Rehearsal of §6e on a copy with simulated dispositions: 22,629–32,667 (ios and steamos inside the budget) |
+| Playmoir / Checkpoint | **v2** (migrated 2026-09-22) | synced to 2026-11-18 (uncommitted) — its cleanup session (`checkpoint-fd`) projected §6e on a copy (22,451–31,012 per track; open 122 → 54 + 59 parked) and waits on the founder's batch: `shared_owner`, the dispositions | 5 tracks at 140–173% of budget on 2026-11-18 (desktop 43,340 · android 41,835 · ios 34,975 · steamos 35,734 · social 40,944), each just under its ceiling. Rehearsal of §6e on a copy with simulated dispositions: 22,629–32,667 (ios and steamos inside the budget) |
 | BuddySystem | **v2** (bootstrapped 2026-10-02) | behind — still on the pre-2026-10-20 single hook wiring | 3 tracks; inside budget on a copy (≤42%). Its CURRENT_STATE is 2,356 chars of tables, so the 2026-11-18 shared cap has nothing to do there; 7 of its 10 open items are `→all` (only new ones are stopped) |
 | Cove, Cove-ACS-Expert, Zendesk-Copilot, armada-astra2, final-fantasy-resonance-ultrawide | v2, single track | behind the 2026-11-12 template | start payload unchanged by it and by 2026-11-18 (verified byte-identical on Cove, Zendesk-Copilot, armada-astra2, Tagsmith, Interview-Prep); they gain the gate + lessons queue + parking |
 | Interview-Prep, Stash, Texsmith, Nuveen-Reporting, Tagsmith, armada-odin3 | v1, single track | behind (the last three also predate the 2026-10-20 parts wiring) | same: nothing about their start changes |
@@ -89,7 +89,8 @@ they wait on (`ledger-archive.py --park/--unpark/--parked`); the gate
 (`--track <name>`) stops on a shared block over its cap, a new `→all` item from
 the wrapping track, or a parked item with no event. One parser for all three
 readers (`protocol_config.state_segments`). A sync now adds any script the
-template gained in one run. `PROTOCOL.md` #11, `DESIGN.md` "Found after
+template gained in one run. Same day: `file_caps.twin_exempt`, for names a
+project repeats by design (Checkpoint SO-14). `PROTOCOL.md` #11, `DESIGN.md` "Found after
 shipping … (2026-11-18)", `MIGRATION.md` §6e.
 
 ## Open loops
