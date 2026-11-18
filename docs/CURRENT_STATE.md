@@ -20,7 +20,7 @@ _Last updated: 2026-11-18_
 
 ## 📍 NEXT ACTION
 
-**Hear back on Checkpoint's first fresh session after its 2026-11-18 cleanup** (`MIGRATION.md` §6e's three checks: the session loads its own track and nothing tagged for another; the parked count line appears and nothing it needs is hidden; its `/end` gate passes with `--track`, and a new `→all` item from it is stopped). The cleanup itself is done and pushed (Checkpoint `01651cb5`, the founder's rulings: `shared_owner` desktop, the dispositions as proposed, the webhook-secret warning moved into its CLAUDE.md first). Other projects pick up the template in their own sessions — the user says "integrate the protocol" there — never from here; BuddySystem is next when the user chooses.
+**Nothing in flight; the next template work is the user's pick.** Checkpoint's 2026-11-18 cleanup is done and live: its `01651cb5` (the founder's rulings: `shared_owner` desktop, the dispositions as proposed, the webhook-secret warning moved into its CLAUDE.md first) and its first wrap on the new `/end` (`e38bb8e1`) passed all three of §6e's checks. Candidates: BuddySystem integrates the protocol in its own session (the user says "integrate the protocol" there — never from here), ideally after open loop (f) `--retag`, since 7 of its 10 items are `→all`; or the `PROTOCOL.md` trim.
 
 ## Template rollout
 
@@ -29,7 +29,7 @@ The template is the KB's real deliverable. This table is what "where do we stand
 | Project | Protocol | Synced to template | Notes |
 |---|---|---|---|
 | `claude-project-template` | **v2**; load by track, the `/end` budget gate and the lessons queue since 2026-11-12 (`23dc02b`); shared-state exit, one owner per item, parked items since 2026-11-18 | — | canonical |
-| Playmoir / Checkpoint | **v2** (migrated 2026-09-22) | synced to 2026-11-18 and cleaned up (its `01651cb5`) | per track 30,074 · 27,325 · 22,425 · 22,614 · 28,520 (desktop · android · ios · steamos · social; was 43,340 · 41,835 · 34,975 · 35,734 · 40,944). ios and steamos are inside the budget and lost their ceilings; the other three ceilings are now 31,000 · 28,000 · 29,500. Ledger 122 open → 52 open + 59 parked (54 of them until the iOS prototype works). Numbers rechecked from this session, read-only |
+| Playmoir / Checkpoint | **v2** (migrated 2026-09-22) | synced to 2026-11-18 and cleaned up (its `01651cb5`) | per track 29,411 (after its first wrap; ceiling 30,000) · 27,325 · 22,425 · 22,614 · 28,520 (desktop · android · ios · steamos · social; was 43,340 · 41,835 · 34,975 · 35,734 · 40,944). ios and steamos are inside the budget and lost their ceilings; android's and social's ceilings are 28,000 · 29,500. Ledger 122 open → 52 open + 59 parked (54 of them until the iOS prototype works). Numbers rechecked from this session, read-only |
 | BuddySystem | **v2** (bootstrapped 2026-10-02) | behind — still on the pre-2026-10-20 single hook wiring | 3 tracks; inside budget on a copy (≤42%). Its CURRENT_STATE is 2,356 chars of tables, so the 2026-11-18 shared cap has nothing to do there; 7 of its 10 open items are `→all` (only new ones are stopped) |
 | Cove, Cove-ACS-Expert, Zendesk-Copilot, armada-astra2, final-fantasy-resonance-ultrawide | v2, single track | behind the 2026-11-12 template | start payload unchanged by it and by 2026-11-18 (verified byte-identical on Cove, Zendesk-Copilot, armada-astra2, Tagsmith, Interview-Prep); they gain the gate + lessons queue + parking |
 | Interview-Prep, Stash, Texsmith, Nuveen-Reporting, Tagsmith, armada-odin3 | v1, single track | behind (the last three also predate the 2026-10-20 parts wiring) | same: nothing about their start changes |
@@ -95,9 +95,7 @@ shipping … (2026-11-18)", `MIGRATION.md` §6e.
 
 ## Open loops
 
-- **Unproven in a live session:** the phrase "integrate the protocol" (2026-11-12),
-  and everything from 2026-11-18 (rehearsed on copies of Checkpoint's documents
-  only). The `--track` load is proven: 6 of the 7 working Checkpoint sessions
+- **Proven live 2026-11-18 on Checkpoint:** the shared-state exit, one owner, parked items — §6e's three checks (own-track load says what it left out, parked count by event, the wrap runs `state-archive.py` and the gate with `--track`; checks 1–2 run by hand in the cleanup session, 3 on its own wrap `e38bb8e1`). Still unproven: the phrase "integrate the protocol" (2026-11-12). The `--track` load is proven: 6 of the 7 working Checkpoint sessions
   since 2026-11-12 ran it as their first or second command; the seventh, a
   20-call audit of another session's fix (2026-11-13 01:03), never loaded a
   track — worth knowing, not worth a rule yet.
