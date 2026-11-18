@@ -20,7 +20,7 @@ _Last updated: 2026-11-18_
 
 ## 📍 NEXT ACTION
 
-**Checkpoint syncs to the 2026-11-18 template and does its one-time cleanup, in its own session** (`MIGRATION.md` §6e: tag per-track bullets → `state-archive.py --apply` → `shared_owner` → retag `→all` items → park what waits on an event → the gate passes with `--ratchet`). Two parts of it are the user's rulings, not work: which track owns the shared paths (`shared_owner`), and dispositions of one track's items made by another. Then hear back on its first fresh session (§6e's three checks). The 2026-11-12 question is answered: the first fresh Checkpoint session (2026-11-12 21:37) ran `--track social` as its very first command, followed the PAGE line and reported its payload. Other projects pick up the template in their own sessions — the user says "integrate the protocol" there — never from here.
+**Hear back on Checkpoint's first fresh session after its 2026-11-18 cleanup** (`MIGRATION.md` §6e's three checks: the session loads its own track and nothing tagged for another; the parked count line appears and nothing it needs is hidden; its `/end` gate passes with `--track`, and a new `→all` item from it is stopped). The cleanup itself is done and pushed (Checkpoint `01651cb5`, the founder's rulings: `shared_owner` desktop, the dispositions as proposed, the webhook-secret warning moved into its CLAUDE.md first). Other projects pick up the template in their own sessions — the user says "integrate the protocol" there — never from here; BuddySystem is next when the user chooses.
 
 ## Template rollout
 
@@ -29,7 +29,7 @@ The template is the KB's real deliverable. This table is what "where do we stand
 | Project | Protocol | Synced to template | Notes |
 |---|---|---|---|
 | `claude-project-template` | **v2**; load by track, the `/end` budget gate and the lessons queue since 2026-11-12 (`23dc02b`); shared-state exit, one owner per item, parked items since 2026-11-18 | — | canonical |
-| Playmoir / Checkpoint | **v2** (migrated 2026-09-22) | synced to 2026-11-18 (uncommitted) — its cleanup session (`checkpoint-fd`) projected §6e on a copy (22,451–31,012 per track; open 122 → 54 + 59 parked) and waits on the founder's batch: `shared_owner`, the dispositions | 5 tracks at 140–173% of budget on 2026-11-18 (desktop 43,340 · android 41,835 · ios 34,975 · steamos 35,734 · social 40,944), each just under its ceiling. Rehearsal of §6e on a copy with simulated dispositions: 22,629–32,667 (ios and steamos inside the budget) |
+| Playmoir / Checkpoint | **v2** (migrated 2026-09-22) | synced to 2026-11-18 and cleaned up (its `01651cb5`) | per track 30,074 · 27,325 · 22,425 · 22,614 · 28,520 (desktop · android · ios · steamos · social; was 43,340 · 41,835 · 34,975 · 35,734 · 40,944). ios and steamos are inside the budget and lost their ceilings; the other three ceilings are now 31,000 · 28,000 · 29,500. Ledger 122 open → 52 open + 59 parked (54 of them until the iOS prototype works). Numbers rechecked from this session, read-only |
 | BuddySystem | **v2** (bootstrapped 2026-10-02) | behind — still on the pre-2026-10-20 single hook wiring | 3 tracks; inside budget on a copy (≤42%). Its CURRENT_STATE is 2,356 chars of tables, so the 2026-11-18 shared cap has nothing to do there; 7 of its 10 open items are `→all` (only new ones are stopped) |
 | Cove, Cove-ACS-Expert, Zendesk-Copilot, armada-astra2, final-fantasy-resonance-ultrawide | v2, single track | behind the 2026-11-12 template | start payload unchanged by it and by 2026-11-18 (verified byte-identical on Cove, Zendesk-Copilot, armada-astra2, Tagsmith, Interview-Prep); they gain the gate + lessons queue + parking |
 | Interview-Prep, Stash, Texsmith, Nuveen-Reporting, Tagsmith, armada-odin3 | v1, single track | behind (the last three also predate the 2026-10-20 parts wiring) | same: nothing about their start changes |
@@ -110,7 +110,9 @@ shipping … (2026-11-18)", `MIGRATION.md` §6e.
   (d) one resumed session received 4 of 8 hook parts (seen once, 2026-11-01,
   cause not found). ((e), a triage table for Checkpoint's shared state and
   `→all` items, became the 2026-11-18 template change and Checkpoint's §6e
-  cleanup.)
+  cleanup.) (f) 2026-11-18: `ledger-archive.py --retag ID=track` — Checkpoint's
+  cleanup needed a one-off script to retag its `→all` items; worth building
+  before BuddySystem (7 of 10 `→all`) does the same.
 - **Lessons flagged, not written:** a check that only reports gets ignored; it
   has to be able to stop the work (Checkpoint's budget, seven weeks). And
   2026-11-18: a ceiling stops growth but shrinks nothing — whatever every reader
