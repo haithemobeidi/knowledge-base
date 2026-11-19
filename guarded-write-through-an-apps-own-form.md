@@ -1,7 +1,7 @@
 ---
 stack: [web, javascript, browser-automation, graphql, data-safety, llm-agents, customer-support]
 kind: pattern
-last_verified: 2026-11-17
+last_verified: 2026-11-18
 ---
 
 # Change one field on a live record through the app's own form: a backup before, a save guard during, a diff after
@@ -41,6 +41,17 @@ The app's user-update mutation takes the entire user object. The notes from an e
 
    Keep the backup in `sessionStorage`: it survives the app's client-side navigation after Save.
 5. **Save, re-read, diff.** List the fields that differ from the backup. The report names them. Anything beyond the named field means stop and tell the human.
+
+## When the form sends more than one call
+
+A guard written for one update call breaks a form that saves in two steps. A "new user" form sent a preview call first, then the create call. The guard allowed the first and blocked the second, and the form hung mid-save with its spinner on.
+
+- **Check nothing was written.** Re-read the list or search for the record. Here, no user had been created.
+- **Reload the page.** Don't click Save again on a stuck form: its state is unknown.
+- **Learn the whole sequence first.** Hook `fetch`, fill the form on a sandbox record, and note every write call it sends, in order ([[capture-a-spas-own-api-calls-with-a-fetch-hook]]).
+- **Match the guard to the exact approved payloads.** Allow each call in the sequence only when its body equals what the human approved, and allow the create only once. Block everything else. The retry with both payloads allowed went through cleanly, and the re-read matched.
+
+For a create there is no "before" to diff. The backup is the list before and after, and the check is that the new record matches the approved payload field for field.
 
 ## Clicking safely
 

@@ -1,7 +1,7 @@
 ---
 stack: [llm, llm-agents, customer-support, claude-code, prompt-engineering]
 kind: pattern
-last_verified: 2026-11-17
+last_verified: 2026-11-18
 ---
 
 # A supervised support agent: modular knowledge behind a router prompt, one risk test for assumptions, autonomy earned per action
@@ -57,6 +57,18 @@ Every action starts behind the human's yes. A peer's advice was to drop approval
 - The helpdesk's API path can fire automation rules nobody tested ([[zendesk-agent-drafts-and-api-writes]]).
 
 The plan instead: an action type stops asking after a run of clean, uncorrected uses, about ten. The never-assume list always asks. The lead's own call was "after many months of testing".
+
+## The first unattended run is read-only, and proves it
+
+Before the agent works tickets with nobody watching, give it one run where it can't write at all.
+
+- **Block writes in the tab and count them.** Wrap `fetch` and XHR so anything that isn't a read is rejected, and report the blocked count at the end. Zero blocked means the agent never tried; that number is the evidence, not the agent's word.
+- **Drafts go in a local file keyed by ticket, not the live reply box.** A draft left in the helpdesk's composer is one stray click from being sent, and it's invisible until someone opens that ticket.
+- **Every ticket gets an output, even a stuck one.** Findings, the items that need the human's go, a suggested status and a paste-ready reply. For a stuck ticket, say what's missing and who to ask. A ticket the run skipped silently looks the same as one it never saw.
+- **Scope the run by time.** "Open tickets created before 5 PM" gives a fixed list; a ticket that arrives mid-run is named as not worked.
+- **The human sends the next morning,** after re-reading each ticket live: a customer reply overnight changes the draft.
+
+First run here: five tickets, zero writes attempted, five drafts. Once the human was at the desk and reviewing each one, drafts moved into the live composer, typed but never submitted. That's a supervised habit, not an unattended one.
 
 ## Check the agent by rerunning it
 
