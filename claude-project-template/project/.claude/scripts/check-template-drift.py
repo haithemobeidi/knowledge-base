@@ -206,9 +206,13 @@ def main() -> None:
         if not pdiff:
             print("Project already matches the template.")
         me = ".claude/scripts/check-template-drift.py"
-        if me in pdiff:
-            # This process is the OLD copy of this script; the adoption steps
-            # belong to the one it just installed.
+        if me in pdiff or ".claude/scripts/protocol_config.py" in pdiff:
+            # This process is the OLD copy of this script, or it imported the
+            # OLD TEMPLATE_MANAGED list (protocol_config.py); the adoption steps
+            # belong to a fresh process that reads what was just installed.
+            # Handing over only when this file changed missed ledger_items.py
+            # (2026-11-18): the list grew in protocol_config.py, this file did
+            # not change, and adopt() ran with the list from before the sync.
             sys.stdout.flush()
             subprocess.run([sys.executable, str(pathlib.Path(proj) / me), "--adopt", "--template", str(tmpl),
                             "--no-fetch"], cwd=proj, check=False,

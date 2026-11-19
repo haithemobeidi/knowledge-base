@@ -697,6 +697,7 @@ TEMPLATE_MANAGED = (
     ".claude/scripts/check-ledger-refs.py",
     ".claude/scripts/migrate-docs-v2.py",
     ".claude/scripts/ledger-archive.py",
+    ".claude/scripts/ledger_items.py",
     ".claude/scripts/state-archive.py",
     ".claude/scripts/end-derive.py",
     ".claude/scripts/check-template-drift.py",
