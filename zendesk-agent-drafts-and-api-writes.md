@@ -1,7 +1,7 @@
 ---
 stack: [zendesk, customer-support, llm-agents, browser-automation]
 kind: gotcha
-last_verified: 2026-11-17
+last_verified: 2026-11-18
 ---
 
 # Zendesk: AI drafts must leave out the sign-off, and writes through /api/v2 can fire "via API" triggers
@@ -29,6 +29,9 @@ last_verified: 2026-11-17
 - **One comment per submit.** A public reply and an internal note need two submits, so post the reply first.
 - **Followers aren't CCs.** The requester doesn't see followers. `follower_ids` and `email_cc_ids` are separate, while the older `collaborator_ids` mixes both. A rule like "take internal people off the CC" is about `email_cc_ids`.
 - **Read before you rely on a status.** On this instance, Pending started a follow-up-then-close automation only for some assignees, and three custom statuses were excluded by name. Read the automations' conditions; don't assume what a status does.
+- **Switching tickets with a draft open.** An automated `navigate` away from a ticket with unsent text hangs on the browser's "Leave site?" dialog. Switch inside the workspace instead: `history.pushState({}, '', '/agent/tickets/<id>')`, then dispatch a `popstate` event. The drafts on both tickets stay ([[claude-in-chrome-traps]], section 7).
+- **Lists in the composer.** Typing `1. ` or `- ` starts a list and the editor adds the marker to every following line. Type it on the first line only, and press Enter twice to leave the list. It leaves no blank line before the next paragraph.
+- **The agent session has a maximum length.** Zendesk signs the browser out with `max_session_timeout` even mid-work: API reads return 401 and the tab moves to the sign-in page. An agent that can't sign in should do its status re-reads before the end of the day, and keep a local copy of every draft, since unsent composer text may not survive.
 
 ## Related
 
