@@ -91,22 +91,20 @@ The support lead wanted proof of each reproduction attempt. The extension's `gif
 
 ## 7. Unsaved input blocks `navigate`: change the route inside the app
 
-A helpdesk ticket had a reply typed into its composer, not sent. `navigate` to the next ticket's URL never finished: the page raised the browser's "Leave site?" dialog (`beforeunload`), and a browser dialog blocks every later tool call until the user dismisses it by hand.
+A page had text typed into a form, not submitted. `navigate` to the next record's URL never finished: the page raised the browser's "Leave site?" dialog (`beforeunload`), and a browser dialog blocks every later tool call until the user dismisses it by hand.
 
 In a single-page app, don't leave the page. Change the route the way the app's own links do:
 
 ```js
-history.pushState({}, '', '/agent/tickets/' + id);
+history.pushState({}, '', nextPath);   // the path the app's own link would go to
 window.dispatchEvent(new PopStateEvent('popstate'));
 ```
 
-The app's router picks up the new path and renders the ticket. No unload happens, so no dialog, and the draft on the first ticket is still there when you come back. Check the page title or a heading afterwards to confirm the switch.
-
-Related habit for rich-text composers: typing `1. ` or `- ` starts a list, and the editor adds the marker to each following line itself. Type the marker on the first line only, press Enter twice to leave the list, and tell the user if the editor left no blank line before the next paragraph.
+The app's router picks up the new path and renders the new record. No unload happens, so no dialog, and the unsent text on the first one is still there when you come back. Check the page title or a heading afterwards to confirm the switch.
 
 ## 8. The site can sign you out mid-session: read live data before the wrap
 
-At the end of a long day the agent went to re-read 30 tickets' statuses for its handoff. Every call came back 401 and the tab had moved to a sign-in page with `max_session_timeout`: the helpdesk caps session length no matter how active the tab is. The agent can't type credentials, so the handoff had to be written from local notes and say so.
+At the end of a long day the agent went to re-read 30 records' statuses for its handoff. Every call came back 401 and the tab had moved to a sign-in page: the site caps session length no matter how active the tab is. The agent can't type credentials, so the handoff had to be written from local notes and say so.
 
 - **Do the live verification read while the user is still working,** not after they've said goodnight.
 - **A burst of failures from parallel calls looks like rate limiting.** Check one call's status code and the tab's URL before retrying.
