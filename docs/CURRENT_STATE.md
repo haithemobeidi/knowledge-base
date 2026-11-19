@@ -20,7 +20,7 @@ _Last updated: 2026-11-18_
 
 ## 📍 NEXT ACTION
 
-**Nothing in flight; the next template work is the user's pick.** Checkpoint's 2026-11-18 cleanup is done and live: its `01651cb5` (the founder's rulings: `shared_owner` desktop, the dispositions as proposed, the webhook-secret warning moved into its CLAUDE.md first) and its first wrap on the new `/end` (`e38bb8e1`) passed all three of §6e's checks. Candidates: BuddySystem integrates the protocol in its own session (the user says "integrate the protocol" there — never from here), where `ledger-archive.py --retag` (built 2026-11-18, `049d2d4`) hands its seven `→all` items to the tracks that act; or the `PROTOCOL.md` trim.
+**Nothing in flight; the next template work is the user's pick.** Checkpoint's 2026-11-18 cleanup is done and live: its `01651cb5` (the founder's rulings: `shared_owner` desktop, the dispositions as proposed, the webhook-secret warning moved into its CLAUDE.md first) and its first wrap on the new `/end` (`e38bb8e1`) passed all three of §6e's checks. Candidates: BuddySystem integrates the protocol in its own session (the user says "integrate the protocol" there — never from here), where `ledger-archive.py --retag` (built 2026-11-18, `049d2d4`) hands its seven `→all` items to the tracks that act; (the `PROTOCOL.md` trim and the `ledger-archive.py` split are done, `6903716`).
 
 ## Template rollout
 
@@ -28,7 +28,7 @@ The template is the KB's real deliverable. This table is what "where do we stand
 
 | Project | Protocol | Synced to template | Notes |
 |---|---|---|---|
-| `claude-project-template` | **v2**; load by track, the `/end` budget gate and the lessons queue since 2026-11-12 (`23dc02b`); shared-state exit, one owner per item, parked items since 2026-11-18, plus `file_caps.twin_exempt` and `ledger-archive.py --retag` the same day | — | canonical |
+| `claude-project-template` | **v2**; load by track, the `/end` budget gate and the lessons queue since 2026-11-12 (`23dc02b`); shared-state exit, one owner per item, parked items since 2026-11-18, plus `file_caps.twin_exempt`, `ledger-archive.py --retag` (its in-place half now `ledger_items.py`) and a `PROTOCOL.md` cut to 28,796 bytes the same day | — | canonical |
 | Playmoir / Checkpoint | **v2** (migrated 2026-09-22) | synced to 2026-11-18 and cleaned up (its `01651cb5`) | per track 29,411 (after its first wrap; ceiling 30,000) · 27,325 · 22,425 · 22,614 · 28,520 (desktop · android · ios · steamos · social; was 43,340 · 41,835 · 34,975 · 35,734 · 40,944). ios and steamos are inside the budget and lost their ceilings; android's and social's ceilings are 28,000 · 29,500. Ledger 122 open → 52 open + 59 parked (54 of them until the iOS prototype works). Numbers rechecked from this session, read-only |
 | BuddySystem | **v2** (bootstrapped 2026-10-02) | behind — still on the pre-2026-10-20 single hook wiring | 3 tracks; inside budget on a copy (≤42%). Its CURRENT_STATE is 2,356 chars of tables, so the 2026-11-18 shared cap has nothing to do there; 7 of its 10 open items are `→all` (only new ones are stopped) |
 | Cove, Cove-ACS-Expert, Zendesk-Copilot, armada-astra2, final-fantasy-resonance-ultrawide | v2, single track | behind the 2026-11-12 template | start payload unchanged by it and by 2026-11-18 (verified byte-identical on Cove, Zendesk-Copilot, armada-astra2, Tagsmith, Interview-Prep); they gain the gate + lessons queue + parking |
@@ -133,8 +133,11 @@ shipping … (2026-11-18)", `MIGRATION.md` §6e.
   `react19.md` (2026-09-09; drop it + one pointer in `references.md`, or turn it
   into a verified checklist) and `do_for_checkpoint.md` (2026-09-21; the v2
   migration brief, obsolete since 2026-09-22).
-- `PROTOCOL.md` is at 221 lines against its own "~200 lines" rule (202 before
-  2026-11-12; this session added to it and trimmed nothing). It wants a real
-  trim, as its own sitting. Same sitting: `ledger-archive.py` crossed the
-  500-line soft cap with `--retag` (566) — split parking/retagging from the
-  closed-line move.
+- **Found by the 2026-11-18 tidy-up's review, not fixed:** the start hook's directive says
+  "run git status/log only if the user asks or the cross-check needs it", while `/start`
+  Step 5 and `PROTOCOL.md` say to run the working-tree check every session. One of them
+  should change; changing the directive changes every project's start payload.
+- **Offered, not asked for:** `PROTOCOL.md` (28,796 bytes) is imported into every session
+  on the machine, including repos with no protocol, where all of it is ignored. Loading it
+  only where `.claude/protocol.json` exists (a short stub globally, the rest via the
+  project's start hook) would remove that cost; it is an architecture change, not a trim.
